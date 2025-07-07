@@ -17,7 +17,7 @@ func newRouter() *gin.Engine {
 	logger := logger.New()
 	router.Use(loggingMiddleware(logger))
 
-	db := db.New()
+	db := db.New(logger)
 	validator, err := validation.New(logger)
 	if err != nil {
 		logger.Error("error creating validator", "err", err.Error())
@@ -29,13 +29,13 @@ func newRouter() *gin.Engine {
 	return router
 }
 func setupRoutes(router *gin.Engine, logger logger.Logger, db db.DB, validator *validation.Validator) {
-	router.GET("/health", health(logger))
+	router.GET("/health", health())
 
 	handlers.SetupIndex(router, logger, db, validator)
 	handlers.SetupSearch(router, logger, db, validator)
 }
 
-func health(logger logger.Logger) gin.HandlerFunc {
+func health() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.String(http.StatusOK, "OK")
 	}

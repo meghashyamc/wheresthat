@@ -19,7 +19,7 @@ func Run(
 
 	router := newRouter()
 	server := &http.Server{
-		Addr:    fmt.Sprintf(":", os.Getenv("PORT")),
+		Addr:    fmt.Sprintf(":%s", os.Getenv("PORT")),
 		Handler: router.Handler(),
 	}
 	go func() {
