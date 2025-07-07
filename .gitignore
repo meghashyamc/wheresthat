@@ -1,2 +1,2 @@
 cmd/.env
-*.search.index
+**/*.index/
