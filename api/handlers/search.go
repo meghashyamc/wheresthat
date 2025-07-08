@@ -14,8 +14,8 @@ const defaultResultsPerPage = 20
 
 type SearchRequest struct {
 	Query   string `form:"query" validate:"required,valid_query,min=1,max=1000"`
-	PerPage int    `form:"limit" validate:"min=1,max=100"`
-	Page    int    `form:"offset" validate:"min=0"`
+	PerPage int    `form:"per_page" validate:"min=1,max=100"`
+	Page    int    `form:"page" validate:"min=1"`
 }
 
 func (r *SearchRequest) setDefaults() {
