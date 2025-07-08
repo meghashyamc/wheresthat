@@ -1,28 +1,28 @@
 package search
 
 import (
-	"github.com/meghashyamc/wheresthat/db"
+	"github.com/meghashyamc/wheresthat/db/searchdb"
 	"github.com/meghashyamc/wheresthat/logger"
 )
 
 type Service struct {
-	logger logger.Logger
-	db     db.DB
+	logger   logger.Logger
+	searchdb searchdb.DB
 }
 
-func New(logger logger.Logger, db db.DB) *Service {
+func New(logger logger.Logger, searchdb searchdb.DB) *Service {
 	return &Service{
-		logger: logger,
-		db:     db,
+		logger:   logger,
+		searchdb: searchdb,
 	}
 
 }
 
-func (s *Service) Search(query string, limit int, offset int) (*db.SearchResponse, error) {
+func (s *Service) Search(query string, limit int, offset int) (*searchdb.Response, error) {
 	s.logger.Info("performing search", "query", query, "limit", limit, "offset", offset)
 
 	// Perform search
-	results, err := s.db.Search(query, limit, offset)
+	results, err := s.searchdb.Search(query, limit, offset)
 	if err != nil {
 		s.logger.Error("search failed", "err", err.Error())
 		return nil, err

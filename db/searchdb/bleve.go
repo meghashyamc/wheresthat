@@ -1,4 +1,4 @@
-package db
+package searchdb
 
 import (
 	"fmt"
@@ -111,7 +111,7 @@ func createIndexMapping() mapping.IndexMapping {
 	return indexMapping
 }
 
-func (b *BleveDB) Search(queryString string, limit int, offset int) (*SearchResponse, error) {
+func (b *BleveDB) Search(queryString string, limit int, offset int) (*Response, error) {
 	start := time.Now()
 
 	index, err := bleve.Open(indexPath)
@@ -133,9 +133,9 @@ func (b *BleveDB) Search(queryString string, limit int, offset int) (*SearchResp
 		return nil, fmt.Errorf("search failed: %w", err)
 	}
 
-	results := make([]SearchResult, len(searchResult.Hits))
+	results := make([]Result, len(searchResult.Hits))
 	for i, hit := range searchResult.Hits {
-		result := SearchResult{
+		result := Result{
 			ID:    hit.ID,
 			Score: hit.Score,
 		}
@@ -158,7 +158,7 @@ func (b *BleveDB) Search(queryString string, limit int, offset int) (*SearchResp
 
 	searchTime := time.Since(start)
 
-	response := &SearchResponse{
+	response := &Response{
 		Results:    results,
 		Total:      searchResult.Total,
 		MaxScore:   searchResult.MaxScore,

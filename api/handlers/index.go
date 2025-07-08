@@ -4,7 +4,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/meghashyamc/wheresthat/db"
+	"github.com/meghashyamc/wheresthat/db/kvdb"
+	"github.com/meghashyamc/wheresthat/db/searchdb"
 	"github.com/meghashyamc/wheresthat/logger"
 	"github.com/meghashyamc/wheresthat/services/index"
 	"github.com/meghashyamc/wheresthat/validation"
@@ -14,8 +15,8 @@ type IndexRequest struct {
 	Path string `json:"path" validate:"valid_path"`
 }
 
-func SetupIndex(router *gin.Engine, logger logger.Logger, db db.DB, validator *validation.Validator) {
-	service := index.New(logger, db)
+func SetupIndex(router *gin.Engine, logger logger.Logger, searchdb searchdb.DB, kvDB kvdb.DB, validator *validation.Validator) {
+	service := index.New(logger, searchdb, kvDB)
 	router.POST("/index", handleIndex(service, logger, validator))
 
 }

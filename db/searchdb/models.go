@@ -1,4 +1,4 @@
-package db
+package searchdb
 
 import "time"
 
@@ -11,7 +11,7 @@ type Document struct {
 	ModTime time.Time `json:"mod_time"`
 }
 
-type SearchResult struct {
+type Result struct {
 	ID      string  `json:"id"`
 	Path    string  `json:"path"`
 	Name    string  `json:"name"`
@@ -20,9 +20,9 @@ type SearchResult struct {
 	ModTime string  `json:"mod_time"`
 }
 
-type SearchResponse struct {
-	Results    []SearchResult `json:"results"`
-	Total      uint64         `json:"total"`
-	MaxScore   float64        `json:"max_score"`
-	SearchTime string         `json:"search_time"`
+type Response struct {
+	Results    []Result `json:"results"`
+	Total      uint64   `json:"total"`
+	MaxScore   float64  `json:"max_score"`
+	SearchTime string   `json:"search_time"`
 }

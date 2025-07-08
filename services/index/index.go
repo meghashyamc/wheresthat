@@ -5,19 +5,22 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/meghashyamc/wheresthat/db"
+	"github.com/meghashyamc/wheresthat/db/kvdb"
+	"github.com/meghashyamc/wheresthat/db/searchdb"
 	"github.com/meghashyamc/wheresthat/logger"
 )
 
 type Service struct {
-	logger logger.Logger
-	db     db.DB
+	logger   logger.Logger
+	searchdb searchdb.DB
+	kvDB     kvdb.DB
 }
 
-func New(logger logger.Logger, db db.DB) *Service {
+func New(logger logger.Logger, searchdb searchdb.DB, kvDB kvdb.DB) *Service {
 	return &Service{
-		logger: logger,
-		db:     db,
+		logger:   logger,
+		searchdb: searchdb,
+		kvDB:     kvDB,
 	}
 }
 
@@ -32,7 +35,7 @@ func (s *Service) Create(rootPath string) error {
 
 	// Step 2: Extract content and process
 	s.logger.Info("Processing files...")
-	var documents []db.Document
+	var documents []searchdb.Document
 	for i, file := range files {
 		if i%100 == 0 {
 			s.logger.Info("Processed %d/%d files\n", i, len(files))
@@ -48,7 +51,7 @@ func (s *Service) Create(rootPath string) error {
 	}
 
 	s.logger.Info("Building search index...")
-	if err := s.db.BuildIndex(documents); err != nil {
+	if err := s.searchdb.BuildIndex(documents); err != nil {
 		log.Fatal(err)
 	}
 

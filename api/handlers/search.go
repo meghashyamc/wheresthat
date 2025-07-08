@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/meghashyamc/wheresthat/db"
+	"github.com/meghashyamc/wheresthat/db/searchdb"
 	"github.com/meghashyamc/wheresthat/logger"
 	"github.com/meghashyamc/wheresthat/services/search"
 	"github.com/meghashyamc/wheresthat/validation"
@@ -29,12 +29,12 @@ func (r *SearchRequest) setDefaults() {
 }
 
 type SearchResponse struct {
-	Results []db.SearchResult `json:"results"`
-	Pagination
+	Results     []searchdb.Result `json:"results"`
+	PageDetails Pagination        `json:"page_details"`
 }
 
-func SetupSearch(router *gin.Engine, logger logger.Logger, db db.DB, validator *validation.Validator) {
-	service := search.New(logger, db)
+func SetupSearch(router *gin.Engine, logger logger.Logger, searchdb searchdb.DB, validator *validation.Validator) {
+	service := search.New(logger, searchdb)
 	router.GET("/search", handleSearch(service, logger, validator))
 
 }
@@ -69,7 +69,7 @@ func handleSearch(service *search.Service, logger logger.Logger, validator *vali
 
 		searchResponse := SearchResponse{
 			Results: results.Results,
-			Pagination: calculatePagination(
+			PageDetails: calculatePagination(
 				int(results.Total),
 				limit,
 				offset),
