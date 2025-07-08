@@ -7,8 +7,8 @@ import (
 )
 
 type response struct {
-	Data   any
-	Errors []string
+	Data   any      `json:"data"`
+	Errors []string `json:"errors"`
 }
 
 func writeResponse(c *gin.Context, data interface{}, statusCode int, errors []string) {

@@ -32,7 +32,7 @@ func (s *Service) Create(rootPath string) error {
 
 	// Step 2: Extract content and process
 	s.logger.Info("Processing files...")
-	var documents []db.SearchDocument
+	var documents []db.Document
 	for i, file := range files {
 		if i%100 == 0 {
 			s.logger.Info("Processed %d/%d files\n", i, len(files))
@@ -48,7 +48,7 @@ func (s *Service) Create(rootPath string) error {
 	}
 
 	s.logger.Info("Building search index...")
-	if err := s.db.BuildIndex(documents, indexPath); err != nil {
+	if err := s.db.BuildIndex(documents); err != nil {
 		log.Fatal(err)
 	}
 

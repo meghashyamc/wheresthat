@@ -10,8 +10,8 @@ import (
 
 const maxContentExtractionSize = 50 * 1024 * 1024 // 50MB limit
 
-func extractContent(fileInfo FileInfo) (*db.SearchDocument, error) {
-	doc := &db.SearchDocument{
+func extractContent(fileInfo FileInfo) (*db.Document, error) {
+	doc := &db.Document{
 		ID:      uuid.New().String(),
 		Path:    fileInfo.Path,
 		Name:    fileInfo.Name,

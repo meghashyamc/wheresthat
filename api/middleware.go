@@ -7,6 +7,8 @@ import (
 	"github.com/meghashyamc/wheresthat/logger"
 )
 
+const HeaderPaginationTotalCount = "X-Pagination-Total-Count"
+
 func loggingMiddleware(logger logger.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		logger.Info("request", "method", c.Request.Method, "path", c.Request.URL.Path)
