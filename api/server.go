@@ -33,6 +33,7 @@ func Run(
 	go func() {
 		defer wg.Done()
 		<-ctx.Done()
+		log.Print("starting to shut down http server")
 		shutdownCtx := context.Background()
 		shutdownCtx, cancel := context.WithTimeout(shutdownCtx, 10*time.Second)
 		defer cancel()

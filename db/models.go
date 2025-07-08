@@ -9,19 +9,15 @@ type Document struct {
 	Content string    `json:"content"`
 	Size    int64     `json:"size"`
 	ModTime time.Time `json:"mod_time"`
-	Type    string    `json:"type"`
 }
 
 type SearchResult struct {
-	ID       string            `json:"id"`
-	Path     string            `json:"path"`
-	Name     string            `json:"name"`
-	Score    float64           `json:"score"`
-	Size     int64             `json:"size"`
-	ModTime  string            `json:"mod_time"`
-	Type     string            `json:"type"`
-	Snippets []string          `json:"snippets"`
-	Fields   map[string]string `json:"fields"`
+	ID      string  `json:"id"`
+	Path    string  `json:"path"`
+	Name    string  `json:"name"`
+	Score   float64 `json:"score"`
+	Size    int64   `json:"size"`
+	ModTime string  `json:"mod_time"`
 }
 
 type SearchResponse struct {

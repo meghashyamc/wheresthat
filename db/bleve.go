@@ -13,6 +13,13 @@ import (
 
 const indexingBatchSize = 100
 const indexPath = "./search.index"
+const (
+	indexFieldContent = "content"
+	indexFieldName    = "name"
+	indexFieldPath    = "path"
+	indexFieldSize    = "size"
+	indexFieldModTime = "mod_time"
+)
 
 type BleveDB struct {
 	logger logger.Logger
@@ -37,6 +44,7 @@ func (b *BleveDB) BuildIndex(documents []Document) error {
 			return err
 		}
 	}
+	defer index.Close()
 
 	// Index documents in batches for better performance
 	batch := index.NewBatch()
@@ -72,37 +80,29 @@ func (b *BleveDB) BuildIndex(documents []Document) error {
 }
 
 func createIndexMapping() mapping.IndexMapping {
-	// Create a mapping for our documents
-	indexMapping := bleve.NewIndexMapping()
 
-	// Create document mapping
+	indexMapping := bleve.NewIndexMapping()
 	docMapping := bleve.NewDocumentMapping()
 
 	// Path field - not analyzed (exact match)
 	pathFieldMapping := bleve.NewTextFieldMapping()
 	pathFieldMapping.Analyzer = "keyword"
-	docMapping.AddFieldMappingsAt("path", pathFieldMapping)
+	docMapping.AddFieldMappingsAt(indexFieldPath, pathFieldMapping)
 
 	// Name field - analyzed for partial matching
 	nameFieldMapping := bleve.NewTextFieldMapping()
 	nameFieldMapping.Analyzer = "standard"
-	docMapping.AddFieldMappingsAt("name", nameFieldMapping)
+	docMapping.AddFieldMappingsAt(indexFieldName, nameFieldMapping)
 
 	// Content field - analyzed for full-text search
 	contentFieldMapping := bleve.NewTextFieldMapping()
 	contentFieldMapping.Analyzer = "standard"
 	contentFieldMapping.Store = false // Don't store full content in index
 	contentFieldMapping.Index = true  // But do index it for searching
-	docMapping.AddFieldMappingsAt("content", contentFieldMapping)
+	docMapping.AddFieldMappingsAt(indexFieldContent, contentFieldMapping)
 
-	// Size field - numeric
 	sizeFieldMapping := bleve.NewNumericFieldMapping()
-	docMapping.AddFieldMappingsAt("size", sizeFieldMapping)
-
-	// Type field - not analyzed
-	typeFieldMapping := bleve.NewTextFieldMapping()
-	typeFieldMapping.Analyzer = "keyword"
-	docMapping.AddFieldMappingsAt("type", typeFieldMapping)
+	docMapping.AddFieldMappingsAt(indexFieldSize, sizeFieldMapping)
 
 	indexMapping.AddDocumentMapping("_default", docMapping)
 
@@ -112,7 +112,6 @@ func createIndexMapping() mapping.IndexMapping {
 func (b *BleveDB) Search(queryString string, limit int, offset int) (*SearchResponse, error) {
 	start := time.Now()
 
-	// Open the index
 	index, err := bleve.Open(indexPath)
 	if err != nil {
 		b.logger.Error("could not open index for search", "err", err.Error(), "path", indexPath)
@@ -120,58 +119,36 @@ func (b *BleveDB) Search(queryString string, limit int, offset int) (*SearchResp
 	}
 	defer index.Close()
 
-	// Create search query
 	searchQuery := b.buildSearchQuery(queryString)
 
-	// Create search request
 	searchRequest := bleve.NewSearchRequestOptions(searchQuery, limit, offset, false)
 
-	// Enable highlighting for content matches
-	searchRequest.Highlight = bleve.NewHighlight()
-	searchRequest.Highlight.AddField("content")
-	searchRequest.Highlight.AddField("name")
-	searchRequest.Fields = []string{"path", "name", "size", "mod_time", "type"}
+	searchRequest.Fields = []string{indexFieldPath, indexFieldName, indexFieldSize, indexFieldModTime}
 
-	// Execute search
 	searchResult, err := index.Search(searchRequest)
 	if err != nil {
 		b.logger.Error("search failed", "err", err.Error())
 		return nil, fmt.Errorf("search failed: %w", err)
 	}
 
-	// Convert results
 	results := make([]SearchResult, len(searchResult.Hits))
 	for i, hit := range searchResult.Hits {
 		result := SearchResult{
-			ID:       hit.ID,
-			Score:    hit.Score,
-			Fields:   make(map[string]string),
-			Snippets: make([]string, 0),
+			ID:    hit.ID,
+			Score: hit.Score,
 		}
 
-		// Extract fields
-		if path, ok := hit.Fields["path"].(string); ok {
+		if path, ok := hit.Fields[indexFieldPath].(string); ok {
 			result.Path = path
 		}
-		if name, ok := hit.Fields["name"].(string); ok {
+		if name, ok := hit.Fields[indexFieldName].(string); ok {
 			result.Name = name
 		}
-		if size, ok := hit.Fields["size"].(float64); ok {
+		if size, ok := hit.Fields[indexFieldSize].(float64); ok {
 			result.Size = int64(size)
 		}
-		if modTime, ok := hit.Fields["mod_time"].(string); ok {
+		if modTime, ok := hit.Fields[indexFieldModTime].(string); ok {
 			result.ModTime = modTime
-		}
-		if fileType, ok := hit.Fields["type"].(string); ok {
-			result.Type = fileType
-		}
-
-		// Extract highlights/snippets
-		if hit.Fragments != nil {
-			for field, fragments := range hit.Fragments {
-				result.Fields[field] = strings.Join(fragments, " ... ")
-				result.Snippets = append(result.Snippets, fragments...)
-			}
 		}
 
 		results[i] = result
@@ -190,45 +167,47 @@ func (b *BleveDB) Search(queryString string, limit int, offset int) (*SearchResp
 }
 
 func (b *BleveDB) buildSearchQuery(queryString string) query.Query {
-	// Trim whitespace
+
+	const (
+		boostForContent      = 3.0
+		boostForFileName     = 2.0
+		boostForPath         = 1.0
+		boostForPhraseMatch  = 5.0
+		boostForPartialMatch = 1.5
+	)
+
 	queryString = strings.TrimSpace(queryString)
 
 	if queryString == "" {
 		return bleve.NewMatchAllQuery()
 	}
 
-	// Create a disjunction query that searches across multiple fields
 	disjunctQuery := bleve.NewDisjunctionQuery()
 
-	// Search in content (highest boost)
 	contentQuery := bleve.NewMatchQuery(queryString)
-	contentQuery.SetField("content")
-	contentQuery.SetBoost(3.0)
+	contentQuery.SetField(indexFieldContent)
+	contentQuery.SetBoost(boostForContent)
 	disjunctQuery.AddQuery(contentQuery)
 
-	// Search in file name (medium boost)
 	nameQuery := bleve.NewMatchQuery(queryString)
-	nameQuery.SetField("name")
-	nameQuery.SetBoost(2.0)
+	nameQuery.SetField(indexFieldName)
+	nameQuery.SetBoost(boostForFileName)
 	disjunctQuery.AddQuery(nameQuery)
 
-	// Search in path (lower boost)
 	pathQuery := bleve.NewMatchQuery(queryString)
-	pathQuery.SetField("path")
-	pathQuery.SetBoost(1.0)
+	pathQuery.SetField(indexFieldPath)
+	pathQuery.SetBoost(boostForPath)
 	disjunctQuery.AddQuery(pathQuery)
 
-	// Add phrase search for exact matches (highest boost)
 	phraseQuery := bleve.NewMatchPhraseQuery(queryString)
-	phraseQuery.SetField("content")
-	phraseQuery.SetBoost(5.0)
+	phraseQuery.SetField(indexFieldContent)
+	phraseQuery.SetBoost(boostForPhraseMatch)
 	disjunctQuery.AddQuery(phraseQuery)
 
-	// Add prefix search for partial matches
 	if len(queryString) > 2 {
 		prefixQuery := bleve.NewPrefixQuery(queryString)
-		prefixQuery.SetField("name")
-		prefixQuery.SetBoost(1.5)
+		prefixQuery.SetField(indexFieldName)
+		prefixQuery.SetBoost(boostForPartialMatch)
 		disjunctQuery.AddQuery(prefixQuery)
 	}
 
