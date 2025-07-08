@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/blevesearch/bleve/v2"
+	"github.com/blevesearch/bleve/v2/analysis/analyzer/keyword"
+	"github.com/blevesearch/bleve/v2/analysis/analyzer/standard"
 	"github.com/blevesearch/bleve/v2/mapping"
 	"github.com/blevesearch/bleve/v2/search/query"
 	"github.com/meghashyamc/wheresthat/logger"
@@ -86,17 +88,17 @@ func createIndexMapping() mapping.IndexMapping {
 
 	// Path field - not analyzed (exact match)
 	pathFieldMapping := bleve.NewTextFieldMapping()
-	pathFieldMapping.Analyzer = "keyword"
+	pathFieldMapping.Analyzer = keyword.Name
 	docMapping.AddFieldMappingsAt(indexFieldPath, pathFieldMapping)
 
 	// Name field - analyzed for partial matching
 	nameFieldMapping := bleve.NewTextFieldMapping()
-	nameFieldMapping.Analyzer = "standard"
+	nameFieldMapping.Analyzer = standard.Name
 	docMapping.AddFieldMappingsAt(indexFieldName, nameFieldMapping)
 
 	// Content field - analyzed for full-text search
 	contentFieldMapping := bleve.NewTextFieldMapping()
-	contentFieldMapping.Analyzer = "standard"
+	contentFieldMapping.Analyzer = standard.Name
 	contentFieldMapping.Store = false // Don't store full content in index
 	contentFieldMapping.Index = true  // But do index it for searching
 	docMapping.AddFieldMappingsAt(indexFieldContent, contentFieldMapping)
@@ -176,7 +178,7 @@ func (b *BleveDB) buildSearchQuery(queryString string) query.Query {
 		boostForPartialMatch = 1.5
 	)
 
-	queryString = strings.TrimSpace(queryString)
+	queryString = strings.ToLower(strings.TrimSpace(queryString))
 
 	if queryString == "" {
 		return bleve.NewMatchAllQuery()
@@ -209,6 +211,11 @@ func (b *BleveDB) buildSearchQuery(queryString string) query.Query {
 		prefixQuery.SetField(indexFieldName)
 		prefixQuery.SetBoost(boostForPartialMatch)
 		disjunctQuery.AddQuery(prefixQuery)
+
+		contentPrefixQuery := bleve.NewPrefixQuery(queryString)
+		contentPrefixQuery.SetField(indexFieldContent)
+		contentPrefixQuery.SetBoost(boostForPartialMatch)
+		disjunctQuery.AddQuery(contentPrefixQuery)
 	}
 
 	return disjunctQuery

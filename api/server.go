@@ -39,7 +39,9 @@ func Run(
 		defer cancel()
 		if err := server.Shutdown(shutdownCtx); err != nil {
 			fmt.Fprintf(os.Stderr, "error shutting down http server: %s\n", err)
+			return
 		}
+		log.Print("shut down http server successfully")
 	}()
 
 	wg.Wait()
