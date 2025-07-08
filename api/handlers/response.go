@@ -26,3 +26,31 @@ func writeResponse(c *gin.Context, data interface{}, statusCode int, errors []st
 
 	c.JSON(statusCode, response)
 }
+
+type Pagination struct {
+	CurrentPage  int  `json:"current_page"`
+	PageSize     int  `json:"page_size"`
+	TotalPages   int  `json:"total_pages"`
+	HasNextPage  bool `json:"has_next_page"`
+	HasPrevPage  bool `json:"has_prev_page"`
+	TotalResults int  `json:"total_results"`
+}
+
+func calculatePagination(total, limit, offset int) Pagination {
+	pageSize := limit
+	currentPage := (offset / limit) + 1
+	totalPages := (total + pageSize - 1) / pageSize
+
+	if totalPages == 0 {
+		totalPages = 1
+	}
+
+	return Pagination{
+		CurrentPage:  currentPage,
+		PageSize:     pageSize,
+		TotalPages:   totalPages,
+		HasNextPage:  currentPage < totalPages,
+		HasPrevPage:  currentPage > 1,
+		TotalResults: total,
+	}
+}
