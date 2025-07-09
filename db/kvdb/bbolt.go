@@ -15,7 +15,7 @@ type BoltDB struct {
 	logger logger.Logger
 }
 
-const boltDBPath = "./kv.db"
+const boltDBPath = "./.wheresthatstorage/kv.db"
 const boltDefaultBucket = "default"
 
 func New(logger logger.Logger) (*BoltDB, error) {

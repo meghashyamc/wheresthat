@@ -2,7 +2,6 @@ package api
 
 import (
 	"net/http"
-	"os"
 
 	"github.com/gin-gonic/gin"
 	"github.com/meghashyamc/wheresthat/api/handlers"
@@ -12,28 +11,6 @@ import (
 	"github.com/meghashyamc/wheresthat/validation"
 )
 
-func newRouter() *gin.Engine {
-
-	router := setupRouter()
-	logger := logger.New()
-	router.Use(loggingMiddleware(logger))
-
-	kvdb, err := kvdb.New(logger)
-	if err != nil {
-		logger.Error("error creating kvdb", "err", err.Error())
-		os.Exit(1)
-	}
-	searchdb := searchdb.New(logger)
-	validator, err := validation.New(logger)
-	if err != nil {
-		logger.Error("error creating validator", "err", err.Error())
-		os.Exit(1)
-	}
-
-	setupRoutes(router, logger, searchdb, kvdb, validator)
-
-	return router
-}
 func setupRoutes(router *gin.Engine, logger logger.Logger, searchDB searchdb.DB, kvDB kvdb.DB, validator *validation.Validator) {
 	router.GET("/health", health())
 
@@ -47,7 +24,7 @@ func health() gin.HandlerFunc {
 	}
 }
 
-func setupRouter() *gin.Engine {
+func newRouter() *gin.Engine {
 	router := gin.Default()
 	router.UseRawPath = true
 	router.Use(_CORSMiddleware())

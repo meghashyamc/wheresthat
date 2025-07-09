@@ -14,7 +14,7 @@ import (
 )
 
 const indexingBatchSize = 100
-const indexPath = "./search.index"
+const indexPath = "./.wheresthatstorage/search.index"
 const (
 	indexFieldContent = "content"
 	indexFieldName    = "name"
@@ -25,31 +25,26 @@ const (
 
 type BleveDB struct {
 	logger logger.Logger
+	index  bleve.Index
 }
 
-func New(logger logger.Logger) *BleveDB {
-	return &BleveDB{logger: logger}
+func New(logger logger.Logger) (*BleveDB, error) {
+	mapping := createIndexMapping()
+
+	index, err := bleve.New(indexPath, mapping)
+	if err != nil {
+		index, err = bleve.Open(indexPath)
+		if err != nil {
+			logger.Error("could not open index", "err", err.Error())
+			return nil, err
+		}
+	}
+	return &BleveDB{logger: logger, index: index}, nil
 }
 
 func (b *BleveDB) BuildIndex(documents []Document) error {
 
-	// Create index mapping
-	mapping := createIndexMapping()
-
-	// Create or open index
-	index, err := bleve.New(indexPath, mapping)
-	if err != nil {
-		// If index exists, try to open it
-		index, err = bleve.Open(indexPath)
-		if err != nil {
-			b.logger.Error("could not open index", "err", err.Error())
-			return err
-		}
-	}
-	defer index.Close()
-
-	// Index documents in batches for better performance
-	batch := index.NewBatch()
+	batch := b.index.NewBatch()
 
 	for i, doc := range documents {
 
@@ -61,18 +56,16 @@ func (b *BleveDB) BuildIndex(documents []Document) error {
 
 		// Execute batch when it reaches the batch size
 		if (i+1)%indexingBatchSize == 0 {
-			err = index.Batch(batch)
+			err = b.index.Batch(batch)
 			if err != nil {
 				return err
 			}
-			batch = index.NewBatch()
+			batch = b.index.NewBatch()
 		}
 	}
 
-	// Execute remaining documents
 	if batch.Size() > 0 {
-		err = index.Batch(batch)
-		if err != nil {
+		if err := b.index.Batch(batch); err != nil {
 			b.logger.Error("could not index document", "err", err.Error())
 			return err
 		}
@@ -114,20 +107,13 @@ func createIndexMapping() mapping.IndexMapping {
 func (b *BleveDB) Search(queryString string, limit int, offset int) (*Response, error) {
 	start := time.Now()
 
-	index, err := bleve.Open(indexPath)
-	if err != nil {
-		b.logger.Error("could not open index for search", "err", err.Error(), "path", indexPath)
-		return nil, fmt.Errorf("could not open search index: %w", err)
-	}
-	defer index.Close()
-
 	searchQuery := b.buildSearchQuery(queryString)
 
 	searchRequest := bleve.NewSearchRequestOptions(searchQuery, limit, offset, false)
 
 	searchRequest.Fields = []string{indexFieldPath, indexFieldName, indexFieldSize, indexFieldModTime}
 
-	searchResult, err := index.Search(searchRequest)
+	searchResult, err := b.index.Search(searchRequest)
 	if err != nil {
 		b.logger.Error("search failed", "err", err.Error())
 		return nil, fmt.Errorf("search failed: %w", err)
@@ -219,4 +205,15 @@ func (b *BleveDB) buildSearchQuery(queryString string) query.Query {
 	}
 
 	return disjunctQuery
+}
+
+func (b *BleveDB) Close() error {
+
+	if b.index != nil {
+		if err := b.index.Close(); err != nil {
+			b.logger.Error("could not close search index", "err", err.Error())
+			return err
+		}
+	}
+	return nil
 }

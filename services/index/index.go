@@ -3,7 +3,6 @@ package index
 import (
 	"log"
 	"log/slog"
-	"os"
 
 	"github.com/meghashyamc/wheresthat/db/kvdb"
 	"github.com/meghashyamc/wheresthat/db/searchdb"
@@ -56,9 +55,6 @@ func (s *Service) Create(rootPath string) error {
 	}
 
 	s.logger.Info("Index built successfully!")
-
-	indexStat, _ := os.Stat(indexPath)
-	s.logger.Info("Index size in bytes", slog.Int64("size", indexStat.Size()))
 
 	return nil
 }
