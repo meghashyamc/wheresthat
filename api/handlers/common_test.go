@@ -20,7 +20,6 @@ import (
 )
 
 var defaultTestRequestHeaders = map[string]string{"Content-Type": "application/json"}
-var tempDir = "./.wheresthat_test"
 
 var testFiles = map[string]string{
 	"file1.txt":              "This is test content for file1",
@@ -48,7 +47,7 @@ func newTestLogger() logger.Logger {
 	handler := slog.NewJSONHandler(os.Stderr, opts)
 	return slog.New(handler)
 }
-func setupTestServer(t *testing.T, assert *require.Assertions) (*gin.Engine, func()) {
+func setupTestServer(t *testing.T, assert *require.Assertions, tempDir string) (*gin.Engine, func()) {
 
 	t.Setenv("INDEX_PATH", filepath.Join(tempDir, "index"))
 	t.Setenv("KVDB_PATH", filepath.Join(tempDir, "kv.db"))
@@ -73,6 +72,7 @@ func setupTestServer(t *testing.T, assert *require.Assertions) (*gin.Engine, fun
 	router := gin.New()
 
 	SetupIndex(router, testLogger, searchDB, kvDB, validator)
+	SetupSearch(router, testLogger, searchDB, validator)
 
 	cleanup := func() {
 		var err error
@@ -102,12 +102,19 @@ func makeTestHTTPRequest(router *gin.Engine, assert *require.Assertions, method 
 		}
 	}
 	var jsonBody []byte
+	var req *http.Request
 	if requestBodyMap != nil {
 		jsonBody, err = json.Marshal(requestBodyMap)
 		assert.NoError(err)
 	}
 
-	req, err := http.NewRequest(method, endpoint, bytes.NewBuffer(jsonBody))
+	slog.Info("Making test request", "method", method, "endpoint", endpoint, "headers", headers, "body", string(jsonBody))
+
+	if len(jsonBody) > 0 {
+		req, err = http.NewRequest(method, endpoint, bytes.NewBuffer(jsonBody))
+	} else {
+		req, err = http.NewRequest(method, endpoint, nil)
+	}
 	assert.NoError(err)
 
 	for key, value := range headers {
