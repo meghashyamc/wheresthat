@@ -9,6 +9,32 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var createIndexHandlerTestCases = []testCase{
+	{
+		name:           "NoRequestBody",
+		requestHeaders: defaultTestRequestHeaders,
+		requestBody:    nil,
+		expectedStatus: http.StatusUnprocessableEntity,
+	},
+	{
+		name:           "EmptyPath",
+		requestHeaders: defaultTestRequestHeaders,
+		requestBody:    map[string]any{"path": ""},
+		expectedStatus: http.StatusNotAcceptable,
+	},
+	{
+		name:           "NonExistentPath",
+		requestHeaders: defaultTestRequestHeaders,
+		requestBody:    map[string]any{"path": "./abc"},
+		expectedStatus: http.StatusNotAcceptable,
+	},
+	{
+		name:           "Success",
+		requestHeaders: defaultTestRequestHeaders,
+		requestBody:    map[string]any{"path": mustGetAbsolutePath(tempDir)},
+		expectedStatus: http.StatusNoContent,
+	}}
+
 func TestHandleCreateIndex(t *testing.T) {
 	assert := require.New(t)
 	router, cleanup := setupTestServer(t, assert)

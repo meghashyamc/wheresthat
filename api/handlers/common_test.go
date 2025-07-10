@@ -19,6 +19,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var defaultTestRequestHeaders = map[string]string{"Content-Type": "application/json"}
+var tempDir = "./.wheresthat_test"
+
+var testFiles = map[string]string{
+	"file1.txt":              "This is test content for file1",
+	"file2.go":               "package main\n\nfunc main() {\n\tprint(\"Hello\")\n}",
+	"subdir/file3.md":        "# Test Markdown\n\nThis is a test markdown file",
+	"subdir/file4.json":      `{"key": "value", "number": 42}`,
+	"subdir/nested/file5.py": "def hello():\n    print('Hello World')",
+}
+
 type testCase struct {
 	name             string
 	requestHeaders   map[string]string
@@ -105,4 +116,12 @@ func makeTestHTTPRequest(router *gin.Engine, assert *require.Assertions, method 
 	router.ServeHTTP(w, req)
 
 	return w
+}
+
+func mustGetAbsolutePath(relativePath string) string {
+	absPath, err := filepath.Abs(relativePath)
+	if err != nil {
+		panic(err)
+	}
+	return absPath
 }
