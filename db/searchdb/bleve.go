@@ -2,6 +2,7 @@ package searchdb
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -14,7 +15,6 @@ import (
 )
 
 const indexingBatchSize = 100
-const indexPath = "./.wheresthatstorage/search.index"
 const (
 	indexFieldContent = "content"
 	indexFieldName    = "name"
@@ -30,7 +30,7 @@ type BleveDB struct {
 
 func New(logger logger.Logger) (*BleveDB, error) {
 	mapping := createIndexMapping()
-
+	indexPath := os.Getenv("INDEX_PATH")
 	index, err := bleve.New(indexPath, mapping)
 	if err != nil {
 		index, err = bleve.Open(indexPath)

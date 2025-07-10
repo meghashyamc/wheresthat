@@ -12,20 +12,20 @@ import (
 )
 
 type IndexRequest struct {
-	Path string `json:"path" validate:"valid_path"`
+	Path string `json:"path" validate:"required,valid_path"`
 }
 
 func SetupIndex(router *gin.Engine, logger logger.Logger, searchdb searchdb.DB, kvDB kvdb.DB, validator *validation.Validator) {
 	service := index.New(logger, searchdb, kvDB)
-	router.POST("/index", handleIndex(service, logger, validator))
+	router.POST("/index", handleCreateIndex(service, logger, validator))
 
 }
 
-func handleIndex(index *index.Service, logger logger.Logger, validator *validation.Validator) gin.HandlerFunc {
+func handleCreateIndex(index *index.Service, logger logger.Logger, validator *validation.Validator) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		request := IndexRequest{}
 		if err := c.ShouldBindJSON(&request); err != nil {
-			logger.Warn("could not extract expected query params from the input for get notifications", "err", err.Error())
+			logger.Warn("could not extract expected query params from the input", "err", err.Error())
 			c.Abort()
 			writeResponse(c, nil, http.StatusUnprocessableEntity, []string{"failed to extract request body parameters"})
 			return

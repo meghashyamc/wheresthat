@@ -15,20 +15,20 @@ type BoltDB struct {
 	logger logger.Logger
 }
 
-const boltDBPath = "./.wheresthatstorage/kv.db"
 const boltDefaultBucket = "default"
 
 func New(logger logger.Logger) (*BoltDB, error) {
-	if err := os.MkdirAll(filepath.Dir(boltDBPath), 0755); err != nil {
-		logger.Error("failed to create key-value database directory", "err", err.Error())
+	kvDBPath := os.Getenv("KVDB_PATH")
+	if err := os.MkdirAll(filepath.Dir(kvDBPath), 0755); err != nil {
+		logger.Error("failed to create key-value database directory", "err", err.Error(), "path", kvDBPath)
 		return nil, fmt.Errorf("failed to create key-value database directory: %w", err)
 	}
 
-	store, err := bolt.Open(boltDBPath, 0600, &bolt.Options{
+	store, err := bolt.Open(kvDBPath, 0600, &bolt.Options{
 		Timeout: 1 * time.Second,
 	})
 	if err != nil {
-		logger.Error("failed to open database", "err", err.Error())
+		logger.Error("failed to open database", "err", err.Error(), "path", kvDBPath)
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
