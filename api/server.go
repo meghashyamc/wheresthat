@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/meghashyamc/wheresthat/config"
 	"github.com/meghashyamc/wheresthat/db/kvdb"
 	"github.com/meghashyamc/wheresthat/db/searchdb"
 	"github.com/meghashyamc/wheresthat/logger"
@@ -24,15 +25,17 @@ type server struct {
 	searchdb   searchdb.DB
 	validator  *validation.Validator
 	logger     logger.Logger
+	config     *config.Config
 }
 
-func Run(ctx context.Context) error {
+func Run(ctx context.Context, cfg *config.Config) error {
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt)
 
 	defer cancel()
 
 	s := &server{
 		logger: logger.New(),
+		config: cfg,
 	}
 	if err := s.setupDependencies(); err != nil {
 		return err
@@ -46,12 +49,12 @@ func Run(ctx context.Context) error {
 
 func (s *server) setupDependencies() error {
 	var err error
-	s.kvdb, err = kvdb.New(s.logger)
+	s.kvdb, err = kvdb.New(s.logger, s.config)
 	if err != nil {
 		s.logger.Error("error creating kvDB", "err", err.Error())
 		return err
 	}
-	s.searchdb, err = searchdb.New(s.logger)
+	s.searchdb, err = searchdb.New(s.logger, s.config)
 	if err != nil {
 		s.logger.Error("error creating searchDB", "err", err.Error())
 		return err
@@ -79,7 +82,7 @@ func (s *server) setupRouter() {
 func (s *server) setupHTTPServer() {
 
 	httpServer := &http.Server{
-		Addr:    fmt.Sprintf(":%s", os.Getenv("PORT")),
+		Addr:    fmt.Sprintf(":%s", s.config.GetPort()),
 		Handler: s.router.Handler(),
 	}
 	s.httpServer = httpServer

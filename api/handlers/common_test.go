@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/meghashyamc/wheresthat/config"
 	"github.com/meghashyamc/wheresthat/db/kvdb"
 	"github.com/meghashyamc/wheresthat/db/searchdb"
 	"github.com/meghashyamc/wheresthat/logger"
@@ -32,10 +33,10 @@ var testFiles = map[string]string{
 type testCase struct {
 	name             string
 	requestHeaders   map[string]string
-	requestBody      map[string]interface{}
+	requestBody      map[string]any
 	queryParams      map[string]string
 	expectedStatus   int
-	expectedResponse map[string]interface{}
+	expectedResponse map[string]any
 }
 
 func newTestLogger() logger.Logger {
@@ -49,8 +50,11 @@ func newTestLogger() logger.Logger {
 }
 func setupTestServer(t *testing.T, assert *require.Assertions, tempDir string) (*gin.Engine, func()) {
 
-	t.Setenv("INDEX_PATH", filepath.Join(tempDir, "index"))
-	t.Setenv("KVDB_PATH", filepath.Join(tempDir, "kv.db"))
+	t.Setenv("ENV", "test")
+
+	cfg, err := config.Load()
+	assert.NoError(err, "could not load config")
+
 	for relPath, content := range testFiles {
 		fullPath := filepath.Join(tempDir, relPath)
 		err := os.MkdirAll(filepath.Dir(fullPath), 0755)
@@ -61,10 +65,10 @@ func setupTestServer(t *testing.T, assert *require.Assertions, tempDir string) (
 
 	testLogger := newTestLogger()
 
-	searchDB, err := searchdb.New(testLogger)
+	searchDB, err := searchdb.New(testLogger, cfg)
 	assert.NoError(err, "could not create search database")
 
-	kvDB, err := kvdb.New(testLogger)
+	kvDB, err := kvdb.New(testLogger, cfg)
 	assert.NoError(err, "could not create kv database")
 	validator, err := validation.New(testLogger)
 	assert.NoError(err, "could not create validator")

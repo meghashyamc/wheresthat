@@ -16,7 +16,7 @@ var searchHandlerTestCases = []testCase{
 	{
 		name:           "NoQuery",
 		queryParams:    map[string]string{},
-		expectedStatus: http.StatusUnprocessableEntity,
+		expectedStatus: http.StatusNotAcceptable,
 	},
 	{
 		name:           "EmptyQuery",
@@ -30,12 +30,12 @@ var searchHandlerTestCases = []testCase{
 	},
 	{
 		name:           "InvalidPerPage",
-		queryParams:    map[string]string{"query": "test", "per_page": "0"},
+		queryParams:    map[string]string{"query": "test", "per_page": "-1"},
 		expectedStatus: http.StatusNotAcceptable,
 	},
 	{
 		name:           "InvalidPage",
-		queryParams:    map[string]string{"query": "test", "page": "0"},
+		queryParams:    map[string]string{"query": "test", "page": "-1"},
 		expectedStatus: http.StatusNotAcceptable,
 	},
 	{

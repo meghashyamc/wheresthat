@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/meghashyamc/wheresthat/config"
 	"github.com/meghashyamc/wheresthat/logger"
 	bolt "go.etcd.io/bbolt"
 )
@@ -17,8 +18,8 @@ type BoltDB struct {
 
 const boltDefaultBucket = "default"
 
-func New(logger logger.Logger) (*BoltDB, error) {
-	kvDBPath := os.Getenv("KVDB_PATH")
+func New(logger logger.Logger, cfg *config.Config) (*BoltDB, error) {
+	kvDBPath := cfg.GetKVDBPath()
 	if err := os.MkdirAll(filepath.Dir(kvDBPath), 0755); err != nil {
 		logger.Error("failed to create key-value database directory", "err", err.Error(), "path", kvDBPath)
 		return nil, fmt.Errorf("failed to create key-value database directory: %w", err)

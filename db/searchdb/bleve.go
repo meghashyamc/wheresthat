@@ -2,7 +2,6 @@ package searchdb
 
 import (
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -11,6 +10,7 @@ import (
 	"github.com/blevesearch/bleve/v2/analysis/analyzer/standard"
 	"github.com/blevesearch/bleve/v2/mapping"
 	"github.com/blevesearch/bleve/v2/search/query"
+	"github.com/meghashyamc/wheresthat/config"
 	"github.com/meghashyamc/wheresthat/logger"
 )
 
@@ -28,9 +28,9 @@ type BleveDB struct {
 	index  bleve.Index
 }
 
-func New(logger logger.Logger) (*BleveDB, error) {
+func New(logger logger.Logger, cfg *config.Config) (*BleveDB, error) {
 	mapping := createIndexMapping()
-	indexPath := os.Getenv("INDEX_PATH")
+	indexPath := cfg.GetIndexPath()
 	index, err := bleve.New(indexPath, mapping)
 	if err != nil {
 		index, err = bleve.Open(indexPath)

@@ -1,6 +1,7 @@
 package index
 
 import (
+	"fmt"
 	"log"
 	"log/slog"
 
@@ -37,7 +38,7 @@ func (s *Service) Create(rootPath string) error {
 	var documents []searchdb.Document
 	for i, file := range files {
 		if i%100 == 0 {
-			s.logger.Info("Processed %d/%d files\n", i, len(files))
+			s.logger.Info(fmt.Sprintf("Processed %d/%d files\n", i, len(files)))
 		}
 
 		doc, err := extractContent(file)
