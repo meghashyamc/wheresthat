@@ -27,7 +27,7 @@ func Load() (*Config, error) {
 	if err == nil {
 		viperConfig.SetConfigFile(configPath)
 		if err := viperConfig.ReadInConfig(); err != nil {
-			slog.Warn("error reading config file, %s", err)
+			slog.Warn(fmt.Sprintf("error reading config file, %s", err))
 		}
 	}
 	viperConfig.AutomaticEnv()

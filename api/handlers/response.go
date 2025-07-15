@@ -11,7 +11,7 @@ type response struct {
 	Errors []string `json:"errors"`
 }
 
-func writeResponse(c *gin.Context, data interface{}, statusCode int, errors []string) {
+func writeResponse(c *gin.Context, data any, statusCode int, errors []string) {
 
 	if statusCode == http.StatusNoContent {
 		c.JSON(statusCode, nil)

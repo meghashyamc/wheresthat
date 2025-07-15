@@ -36,7 +36,7 @@ type testCase struct {
 	requestBody      map[string]any
 	queryParams      map[string]string
 	expectedStatus   int
-	expectedResponse map[string]any
+	expectedResponse *response
 }
 
 func newTestLogger() logger.Logger {
@@ -86,6 +86,8 @@ func setupTestServer(t *testing.T, assert *require.Assertions, tempDir string) (
 		assert.NoError(err, "could not close kv database")
 		err = os.RemoveAll(tempDir)
 		assert.NoError(err, "could not remove temporary directory")
+		err = os.RemoveAll(cfg.GetIndexPath())
+		assert.NoError(err, "could not remove index directory")
 	}
 
 	return router, cleanup

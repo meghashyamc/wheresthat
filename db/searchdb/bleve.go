@@ -24,8 +24,9 @@ const (
 )
 
 type BleveDB struct {
-	logger logger.Logger
-	index  bleve.Index
+	indexPath string
+	logger    logger.Logger
+	index     bleve.Index
 }
 
 func New(logger logger.Logger, cfg *config.Config) (*BleveDB, error) {
@@ -39,7 +40,7 @@ func New(logger logger.Logger, cfg *config.Config) (*BleveDB, error) {
 			return nil, err
 		}
 	}
-	return &BleveDB{logger: logger, index: index}, nil
+	return &BleveDB{indexPath: indexPath, logger: logger, index: index}, nil
 }
 
 func (b *BleveDB) BuildIndex(documents []Document) error {
