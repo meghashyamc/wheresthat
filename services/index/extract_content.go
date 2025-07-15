@@ -4,7 +4,6 @@ import (
 	"io"
 	"os"
 
-	"github.com/google/uuid"
 	"github.com/meghashyamc/wheresthat/db/searchdb"
 )
 
@@ -12,7 +11,7 @@ const maxContentExtractionSize = 50 * 1024 * 1024 // 50MB limit
 
 func extractContent(fileInfo FileInfo) (*searchdb.Document, error) {
 	doc := &searchdb.Document{
-		ID:      uuid.New().String(),
+		ID:      fileInfo.Path,
 		Path:    fileInfo.Path,
 		Name:    fileInfo.Name,
 		Size:    fileInfo.Size,

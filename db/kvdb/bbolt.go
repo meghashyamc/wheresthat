@@ -16,7 +16,10 @@ type BoltDB struct {
 	logger logger.Logger
 }
 
-const boltDefaultBucket = "default"
+const (
+	boltDefaultBucket = "default"
+	lastIndexTimeKey  = "__last_index_time__"
+)
 
 func New(logger logger.Logger, cfg *config.Config) (*BoltDB, error) {
 	kvDBPath := cfg.GetKVDBPath()
@@ -34,7 +37,8 @@ func New(logger logger.Logger, cfg *config.Config) (*BoltDB, error) {
 	}
 
 	boltDB := &BoltDB{
-		store: store,
+		store:  store,
+		logger: logger,
 	}
 
 	if err := boltDB.initBucket(); err != nil {
@@ -59,7 +63,10 @@ func (b *BoltDB) initBucket() error {
 func (b *BoltDB) Set(key string, value string) error {
 	if key == "" {
 		b.logger.Error("key cannot be empty", "key", key)
-		return fmt.Errorf("key cannot be empty")
+		return &InvalidKeyError{
+			Key:    key,
+			Reason: "key cannot be empty",
+		}
 	}
 
 	return b.store.Update(func(tx *bolt.Tx) error {
@@ -82,7 +89,10 @@ func (b *BoltDB) Set(key string, value string) error {
 func (b *BoltDB) Get(key string) (string, error) {
 	if key == "" {
 		b.logger.Error("key cannot be empty", "key", key)
-		return "", fmt.Errorf("key cannot be empty")
+		return "", &InvalidKeyError{
+			Key:    key,
+			Reason: "key cannot be empty",
+		}
 	}
 
 	var value []byte
@@ -96,7 +106,7 @@ func (b *BoltDB) Get(key string) (string, error) {
 		v := bucket.Get([]byte(key))
 		if v == nil {
 			b.logger.Error("key not found", "key", key)
-			return fmt.Errorf("key not found")
+			return &NotFoundError{Key: key}
 		}
 
 		value = make([]byte, len(v))
@@ -105,6 +115,10 @@ func (b *BoltDB) Get(key string) (string, error) {
 	})
 
 	if err != nil {
+		if notFoundErr, ok := err.(*NotFoundError); ok {
+			b.logger.Error("key not found", "key", key)
+			return "", notFoundErr
+		}
 		return "", err
 	}
 
@@ -121,7 +135,10 @@ func (b *BoltDB) Close() error {
 func (b *BoltDB) Delete(key string) error {
 	if key == "" {
 		b.logger.Error("key cannot be empty", "key", key)
-		return fmt.Errorf("key cannot be empty")
+		return &InvalidKeyError{
+			Key:    key,
+			Reason: "key cannot be empty",
+		}
 	}
 
 	return b.store.Update(func(tx *bolt.Tx) error {

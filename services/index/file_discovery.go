@@ -1,10 +1,13 @@
 package index
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/meghashyamc/wheresthat/db/kvdb"
 )
 
 type FileInfo struct {
@@ -15,8 +18,8 @@ type FileInfo struct {
 	IsText  bool
 }
 
-func discoverFiles(rootPath string) ([]FileInfo, error) {
-	var files []FileInfo
+func (s *Service) discoverModifiedFiles(rootPath string, lastIndexTime time.Time) ([]FileInfo, error) {
+	var modifiedFiles []FileInfo
 
 	err := filepath.Walk(rootPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -27,20 +30,56 @@ func discoverFiles(rootPath string) ([]FileInfo, error) {
 			return nil
 		}
 
-		fileInfo := FileInfo{
-			Path:    path,
-			Name:    info.Name(),
-			Size:    info.Size(),
-			ModTime: info.ModTime(),
+		fileModTime := info.ModTime()
+
+		if s.shouldFileBeIndexed(path, fileModTime, lastIndexTime) {
+			fileInfo := FileInfo{
+				Path:    path,
+				Name:    info.Name(),
+				Size:    info.Size(),
+				ModTime: fileModTime,
+			}
+
+			fileInfo.IsText = isTextFile(path)
+			modifiedFiles = append(modifiedFiles, fileInfo)
 		}
 
-		fileInfo.IsText = isTextFile(path)
-
-		files = append(files, fileInfo)
 		return nil
 	})
 
-	return files, err
+	return modifiedFiles, err
+}
+
+func (s *Service) shouldFileBeIndexed(path string, fileModTime time.Time, lastIndexTime time.Time) bool {
+
+	// Check if this file was indexed before
+	metadata, err := s.getFileMetadata(path)
+	if err != nil {
+		var notFoundErr *kvdb.NotFoundError
+		var invalidKeyErr *kvdb.InvalidKeyError
+
+		switch {
+		// File not found in database, should be indexed
+		case errors.As(err, &notFoundErr):
+			return true
+			// Invalid key, log error and index
+		case errors.As(err, &invalidKeyErr):
+			s.logger.Error("invalid key for file path", "key", path, "err", err.Error())
+			return true
+		// Unknown error, log error and index
+		default:
+			s.logger.Error("failed to get metadata", "path", path, "err", err.Error())
+			return true
+		}
+	}
+
+	// File was indexed before, check if it was modified since
+	if fileModTime.After(metadata.LastIndexed) {
+		return true
+	}
+
+	// File is already indexed and has not been modified after indexing
+	return false
 }
 
 func isTextFile(path string) bool {
