@@ -2,6 +2,7 @@ package searchdb
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -31,7 +32,7 @@ type BleveDB struct {
 
 func New(logger logger.Logger, cfg *config.Config) (*BleveDB, error) {
 	mapping := createIndexMapping()
-	indexPath := cfg.GetIndexPath()
+	indexPath := filepath.Join(cfg.GetStoragePath(), cfg.GetIndexPath())
 	index, err := bleve.New(indexPath, mapping)
 	if err != nil {
 		index, err = bleve.Open(indexPath)

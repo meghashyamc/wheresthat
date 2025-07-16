@@ -16,14 +16,17 @@ type Config struct {
 	config *viper.Viper
 }
 
-func Load() (*Config, error) {
-	viperConfig := viper.New()
-	env := os.Getenv(keyEnv)
-	if env == "" {
-		env = envLocal
+func Load(env string) (*Config, error) {
+
+	if len(env) == 0 {
+		if env = os.Getenv(keyEnv); len(env) == 0 {
+			env = envLocal
+		}
 	}
 
-	configPath, err := getConfigPath(envLocal)
+	configPath, err := getConfigPath(env)
+
+	viperConfig := viper.New()
 	if err == nil {
 		viperConfig.SetConfigFile(configPath)
 		if err := viperConfig.ReadInConfig(); err != nil {
@@ -64,6 +67,15 @@ func (c *Config) GetIndexPath() string {
 	}
 
 	return indexPath
+}
+
+func (c *Config) GetStoragePath() string {
+	storagePath := c.config.GetString("STORAGE_PATH")
+	if len(storagePath) == 0 {
+		storagePath = c.config.GetString("database.storage_path")
+	}
+
+	return storagePath
 }
 
 func getProjectRoot() (string, error) {

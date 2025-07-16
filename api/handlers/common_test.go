@@ -9,7 +9,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"testing"
 
 	"github.com/gin-gonic/gin"
 	"github.com/meghashyamc/wheresthat/config"
@@ -48,15 +47,13 @@ func newTestLogger() logger.Logger {
 	handler := slog.NewJSONHandler(os.Stderr, opts)
 	return slog.New(handler)
 }
-func setupTestServer(t *testing.T, assert *require.Assertions, tempDir string) (*gin.Engine, func()) {
+func setupTestServer(assert *require.Assertions, testEnv string, testFileSystemRoot string) (*gin.Engine, func()) {
 
-	t.Setenv("ENV", "test")
-
-	cfg, err := config.Load()
+	cfg, err := config.Load(testEnv)
 	assert.NoError(err, "could not load config")
 
 	for relPath, content := range testFiles {
-		fullPath := filepath.Join(tempDir, relPath)
+		fullPath := filepath.Join(testFileSystemRoot, relPath)
 		err := os.MkdirAll(filepath.Dir(fullPath), 0755)
 		assert.NoError(err, "could not create test sub-directory")
 		err = os.WriteFile(fullPath, []byte(content), 0644)
@@ -84,10 +81,10 @@ func setupTestServer(t *testing.T, assert *require.Assertions, tempDir string) (
 		assert.NoError(err, "could not close search database")
 		err = kvDB.Close()
 		assert.NoError(err, "could not close kv database")
-		err = os.RemoveAll(tempDir)
-		assert.NoError(err, "could not remove temporary directory")
-		err = os.RemoveAll(cfg.GetIndexPath())
-		assert.NoError(err, "could not remove index directory")
+		err = os.RemoveAll(testFileSystemRoot)
+		assert.NoError(err, "could not remove temporary file system directory")
+		err = os.RemoveAll(cfg.GetStoragePath())
+		assert.NoError(err, "could not remove storage directory")
 	}
 
 	return router, cleanup

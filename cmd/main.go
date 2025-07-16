@@ -13,7 +13,7 @@ import (
 func main() {
 	godotenv.Load()
 
-	cfg, err := config.Load()
+	cfg, err := config.Load("")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to load config: %s\n", err)
 		os.Exit(1)

@@ -2,5 +2,6 @@ server:
   port: 8080
 
 database:
-  kvdb_path: "./.wheresthatstorage/kv.db"
-  index_path: "./.wheresthatstorage/search.index"
+  kvdb_path: "/kv.db"
+  index_path: "/search.index"
+  storage_path: "./.wheresthatstorage"

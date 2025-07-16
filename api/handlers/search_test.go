@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const tempDirSearch = "./.wheresthat_search_test"
+const testFileSystemRootSearch = "./.wheresthat_search_test"
 
 var searchHandlerTestCases = []testCase{
 	{
@@ -47,10 +47,10 @@ var searchHandlerTestCases = []testCase{
 			Data: SearchResponse{
 				Results: []searchdb.Result{
 					{
-						Path: mustGetAbsolutePath(tempDirSearch + "/file1.txt"),
+						Path: mustGetAbsolutePath(testFileSystemRootSearch + "/file1.txt"),
 					},
 					{
-						Path: mustGetAbsolutePath(tempDirSearch + "/subdir/file3.md"),
+						Path: mustGetAbsolutePath(testFileSystemRootSearch + "/subdir/file3.md"),
 					},
 				},
 			},
@@ -63,7 +63,7 @@ var searchHandlerTestCases = []testCase{
 			Data: SearchResponse{
 				Results: []searchdb.Result{
 					{
-						Path: mustGetAbsolutePath(tempDirSearch + "/file2.go"),
+						Path: mustGetAbsolutePath(testFileSystemRootSearch + "/file2.go"),
 					},
 				},
 			},
@@ -77,7 +77,7 @@ var searchHandlerTestCases = []testCase{
 			Data: SearchResponse{
 				Results: []searchdb.Result{
 					{
-						Path: mustGetAbsolutePath(tempDirSearch + "/subdir/file3.md"),
+						Path: mustGetAbsolutePath(testFileSystemRootSearch + "/subdir/file3.md"),
 					},
 				},
 			},
@@ -91,7 +91,7 @@ var searchHandlerTestCases = []testCase{
 			Data: SearchResponse{
 				Results: []searchdb.Result{
 					{
-						Path: mustGetAbsolutePath(tempDirSearch + "/file1.txt"),
+						Path: mustGetAbsolutePath(testFileSystemRootSearch + "/file1.txt"),
 					},
 				},
 			},
@@ -105,7 +105,7 @@ var searchHandlerTestCases = []testCase{
 			Data: SearchResponse{
 				Results: []searchdb.Result{
 					{
-						Path: mustGetAbsolutePath(tempDirSearch + "/file1.txt"),
+						Path: mustGetAbsolutePath(testFileSystemRootSearch + "/file1.txt"),
 					},
 				},
 			},
@@ -119,7 +119,7 @@ var searchHandlerTestCases = []testCase{
 			Data: SearchResponse{
 				Results: []searchdb.Result{
 					{
-						Path: mustGetAbsolutePath(tempDirSearch + "/file2.go"),
+						Path: mustGetAbsolutePath(testFileSystemRootSearch + "/file2.go"),
 					},
 				},
 			},
@@ -133,10 +133,10 @@ var searchHandlerTestCases = []testCase{
 			Data: SearchResponse{
 				Results: []searchdb.Result{
 					{
-						Path: mustGetAbsolutePath(tempDirSearch + "/subdir/nested/file5.py"),
+						Path: mustGetAbsolutePath(testFileSystemRootSearch + "/subdir/nested/file5.py"),
 					},
 					{
-						Path: mustGetAbsolutePath(tempDirSearch + "/file2.go"),
+						Path: mustGetAbsolutePath(testFileSystemRootSearch + "/file2.go"),
 					},
 				},
 			},
@@ -150,7 +150,7 @@ var searchHandlerTestCases = []testCase{
 			Data: SearchResponse{
 				Results: []searchdb.Result{
 					{
-						Path: mustGetAbsolutePath(tempDirSearch + "/subdir/file4.json"),
+						Path: mustGetAbsolutePath(testFileSystemRootSearch + "/subdir/file4.json"),
 					},
 				},
 			},
@@ -182,7 +182,7 @@ var searchHandlerTestCases = []testCase{
 			Data: SearchResponse{
 				Results: []searchdb.Result{
 					{
-						Path: mustGetAbsolutePath(tempDirSearch + "/subdir/file3.md"),
+						Path: mustGetAbsolutePath(testFileSystemRootSearch + "/subdir/file3.md"),
 					},
 				},
 				PageDetails: Pagination{
@@ -204,10 +204,10 @@ var searchHandlerTestCases = []testCase{
 			Data: SearchResponse{
 				Results: []searchdb.Result{
 					{
-						Path: mustGetAbsolutePath(tempDirSearch + "/subdir/nested/file5.py"),
+						Path: mustGetAbsolutePath(testFileSystemRootSearch + "/subdir/nested/file5.py"),
 					},
 					{
-						Path: mustGetAbsolutePath(tempDirSearch + "/file2.go"),
+						Path: mustGetAbsolutePath(testFileSystemRootSearch + "/file2.go"),
 					},
 				},
 			},
@@ -222,14 +222,14 @@ func TestHandleSearch(t *testing.T) {
 	}
 
 	assert := require.New(t)
-	router, cleanup := setupTestServer(t, assert, tempDirSearch)
+	router, cleanup := setupTestServer(assert, "searchtest", testFileSystemRootSearch)
 	defer cleanup()
 
 	indexRequestBody := map[string]any{
-		"path": mustGetAbsolutePath(tempDirSearch),
+		"path": mustGetAbsolutePath(testFileSystemRootSearch),
 	}
 	w := makeTestHTTPRequest(router, assert, http.MethodPost, "/index", defaultTestRequestHeaders, indexRequestBody, nil)
-	assert.Equal(http.StatusNoContent, w.Code, "Index creation should succeed before running search tests")
+	assert.Equal(http.StatusNoContent, w.Code, "index creation should succeed before running search tests")
 
 	for _, testCase := range searchHandlerTestCases {
 		t.Run(testCase.name, func(t *testing.T) {

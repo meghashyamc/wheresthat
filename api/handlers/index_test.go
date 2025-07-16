@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const tempDirIndex = "./.wheresthat_index_test"
+const testFileSystemRootIndex = "./.wheresthat_index_test"
 
 var createIndexHandlerTestCases = []testCase{
 	{
@@ -33,13 +33,13 @@ var createIndexHandlerTestCases = []testCase{
 	{
 		name:           "Success",
 		requestHeaders: defaultTestRequestHeaders,
-		requestBody:    map[string]any{"path": mustGetAbsolutePath(tempDirIndex)},
+		requestBody:    map[string]any{"path": mustGetAbsolutePath(testFileSystemRootIndex)},
 		expectedStatus: http.StatusNoContent,
 	}}
 
 func TestHandleCreateIndex(t *testing.T) {
 	assert := require.New(t)
-	router, cleanup := setupTestServer(t, assert, tempDirIndex)
+	router, cleanup := setupTestServer(assert, "indextest", testFileSystemRootIndex)
 	defer cleanup()
 
 	for _, testCase := range createIndexHandlerTestCases {
