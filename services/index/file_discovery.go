@@ -18,7 +18,7 @@ type FileInfo struct {
 	IsText  bool
 }
 
-func (s *Service) discoverModifiedFiles(rootPath string, lastIndexTime time.Time) ([]FileInfo, error) {
+func (s *Service) discoverModifiedFiles(rootPath string) ([]FileInfo, error) {
 	var modifiedFiles []FileInfo
 
 	err := filepath.Walk(rootPath, func(path string, info os.FileInfo, err error) error {
@@ -32,7 +32,7 @@ func (s *Service) discoverModifiedFiles(rootPath string, lastIndexTime time.Time
 
 		fileModTime := info.ModTime()
 
-		if s.shouldFileBeIndexed(path, fileModTime, lastIndexTime) {
+		if s.shouldFileBeIndexed(path, fileModTime) {
 			fileInfo := FileInfo{
 				Path:    path,
 				Name:    info.Name(),
@@ -50,7 +50,7 @@ func (s *Service) discoverModifiedFiles(rootPath string, lastIndexTime time.Time
 	return modifiedFiles, err
 }
 
-func (s *Service) shouldFileBeIndexed(path string, fileModTime time.Time, lastIndexTime time.Time) bool {
+func (s *Service) shouldFileBeIndexed(path string, fileModTime time.Time) bool {
 
 	// Check if this file was indexed before
 	metadata, err := s.getFileMetadata(path)

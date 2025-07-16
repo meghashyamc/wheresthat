@@ -29,6 +29,12 @@ var testFiles = map[string]string{
 	"subdir/nested/file5.py": "def hello():\n    print('Hello World')",
 }
 
+type testServer struct {
+	router   *gin.Engine
+	kvDB     kvdb.DB
+	searchDB searchdb.DB
+}
+
 type testCase struct {
 	name             string
 	requestHeaders   map[string]string
@@ -47,7 +53,7 @@ func newTestLogger() logger.Logger {
 	handler := slog.NewJSONHandler(os.Stderr, opts)
 	return slog.New(handler)
 }
-func setupTestServer(assert *require.Assertions, testEnv string, testFileSystemRoot string) (*gin.Engine, func()) {
+func setupTestServer(assert *require.Assertions, testEnv string, testFileSystemRoot string) (*testServer, func()) {
 
 	cfg, err := config.Load(testEnv)
 	assert.NoError(err, "could not load config")
@@ -87,10 +93,14 @@ func setupTestServer(assert *require.Assertions, testEnv string, testFileSystemR
 		assert.NoError(err, "could not remove storage directory")
 	}
 
-	return router, cleanup
+	return &testServer{
+		router:   router,
+		searchDB: searchDB,
+		kvDB:     kvDB,
+	}, cleanup
 }
 
-func makeTestHTTPRequest(router *gin.Engine, assert *require.Assertions, method string, endpoint string, headers map[string]string, requestBodyMap map[string]interface{}, queryParams map[string]string) *httptest.ResponseRecorder {
+func makeTestHTTPRequest(server *testServer, assert *require.Assertions, method string, endpoint string, headers map[string]string, requestBodyMap map[string]interface{}, queryParams map[string]string) *httptest.ResponseRecorder {
 
 	var err error
 	w := httptest.NewRecorder()
@@ -123,7 +133,7 @@ func makeTestHTTPRequest(router *gin.Engine, assert *require.Assertions, method 
 	for key, value := range headers {
 		req.Header.Set(key, value)
 	}
-	router.ServeHTTP(w, req)
+	server.router.ServeHTTP(w, req)
 
 	return w
 }

@@ -140,6 +140,29 @@ func (b *BoltDB) Delete(key string) error {
 	})
 }
 
+func (b *BoltDB) GetAllKeys() ([]string, error) {
+	var keys []string
+
+	err := b.store.View(func(tx *bolt.Tx) error {
+		bucket, err := b.getBucket(tx)
+		if err != nil {
+			return err
+		}
+
+		return bucket.ForEach(func(k, v []byte) error {
+			keys = append(keys, string(k))
+			return nil
+		})
+	})
+
+	if err != nil {
+		b.logger.Error("failed to get all keys", "err", err.Error())
+		return nil, fmt.Errorf("failed to get all keys: %w", err)
+	}
+
+	return keys, nil
+}
+
 func (b *BoltDB) validateKey(key string) error {
 	if key == "" {
 		b.logger.Error("key cannot be empty", "key", key)

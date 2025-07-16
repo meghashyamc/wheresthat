@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -215,53 +217,128 @@ var searchHandlerTestCases = []testCase{
 	},
 }
 
+var searchBeforeFileChanges = testCase{
+
+	name:           "SearchBeforeFileChanges",
+	queryParams:    map[string]string{"query": "HELLO"},
+	expectedStatus: http.StatusOK,
+	expectedResponse: &response{
+		Data: SearchResponse{
+			Results: []searchdb.Result{
+				{
+					Path: mustGetAbsolutePath(testFileSystemRootSearch + "/subdir/nested/file5.py"),
+				},
+				{
+					Path: mustGetAbsolutePath(testFileSystemRootSearch + "/file2.go"),
+				},
+			},
+		},
+	},
+}
+
+var searchAfterFileChanges = testCase{
+
+	name:           "SearchAfterFileChanges",
+	queryParams:    map[string]string{"query": "HELLO"},
+	expectedStatus: http.StatusOK,
+	expectedResponse: &response{
+		Data: SearchResponse{
+			Results: []searchdb.Result{
+				{
+					Path: mustGetAbsolutePath(testFileSystemRootSearch + "/newfile.txt"),
+				},
+			},
+		},
+	},
+}
+
 func TestHandleSearch(t *testing.T) {
-	type searchResponse struct {
-		Data   SearchResponse `json:"data"`
-		Errors []string       `json:"errors"`
-	}
 
 	assert := require.New(t)
-	router, cleanup := setupTestServer(assert, "searchtest", testFileSystemRootSearch)
+	server, cleanup := setupTestServer(assert, "searchtest", testFileSystemRootSearch)
 	defer cleanup()
 
 	indexRequestBody := map[string]any{
 		"path": mustGetAbsolutePath(testFileSystemRootSearch),
 	}
-	w := makeTestHTTPRequest(router, assert, http.MethodPost, "/index", defaultTestRequestHeaders, indexRequestBody, nil)
+	w := makeTestHTTPRequest(server, assert, http.MethodPost, "/index", defaultTestRequestHeaders, indexRequestBody, nil)
 	assert.Equal(http.StatusNoContent, w.Code, "index creation should succeed before running search tests")
 
 	for _, testCase := range searchHandlerTestCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			assert := require.New(t)
-			w := makeTestHTTPRequest(router, assert, http.MethodGet, "/search", testCase.requestHeaders, nil, testCase.queryParams)
-			responseBytes := w.Body.Bytes()
-			assert.Equal(testCase.expectedStatus, w.Code, fmt.Sprintf("response gotten was %s", string(responseBytes)))
-
-			if testCase.expectedResponse == nil {
-				return
-			}
-
-			actualResponse := searchResponse{}
-			err := json.Unmarshal(responseBytes, &actualResponse)
-			assert.NoError(err, "could not unmarshal gotten response")
-
-			expectedResponseData := testCase.expectedResponse.Data.(SearchResponse)
-			// print("actual response data--------------->")
-			// for _, actualResult := range actualResponse.Data.Results {
-			// 	println(actualResult.Path)
-			// }
-			assert.Equal(len(expectedResponseData.Results), len(actualResponse.Data.Results), "should have the expected number of results")
-
-			for i, expectedResult := range expectedResponseData.Results {
-				assert.Equal(expectedResult.Path, actualResponse.Data.Results[i].Path)
-			}
-
-			if expectedResponseData.PageDetails == (Pagination{}) {
-				return
-			}
-
-			assert.Equal(expectedResponseData.PageDetails, actualResponse.Data.PageDetails)
+			assertSearchResults(t, testCase, server)
 		})
 	}
+
+	// Testing scenario where the index is created multiple times with and without file changes
+	// Call /index with the same request body again
+	w = makeTestHTTPRequest(server, assert, http.MethodPost, "/index", defaultTestRequestHeaders, indexRequestBody, nil)
+	assert.Equal(http.StatusNoContent, w.Code, "duplicate index creation should succeed")
+	t.Run(searchBeforeFileChanges.name, func(t *testing.T) {
+		assertSearchResults(t, searchBeforeFileChanges, server)
+	})
+
+	makeFileChanges(assert, testFileSystemRootSearch)
+
+	// Call /index with the same request body again after file changes
+	w = makeTestHTTPRequest(server, assert, http.MethodPost, "/index", defaultTestRequestHeaders, indexRequestBody, nil)
+	assert.Equal(http.StatusNoContent, w.Code, "duplicate index creation should succeed")
+
+	// Try searching after file changes
+	t.Run(searchAfterFileChanges.name, func(t *testing.T) {
+		assertSearchResults(t, searchAfterFileChanges, server)
+	})
+
+}
+
+func makeFileChanges(assert *require.Assertions, testFileSystemRootSearch string) {
+
+	// 1. Edit a file
+	editedFilePath := filepath.Join(testFileSystemRootSearch, "subdir/nested/file5.py")
+	err := os.WriteFile(editedFilePath, []byte("print('ping')"), 0644)
+	assert.NoError(err, "should be able to edit existing file")
+
+	// 2. Delete a file
+	deletedFilePath := filepath.Join(testFileSystemRootSearch, "file2.go")
+	err = os.Remove(deletedFilePath)
+	assert.NoError(err, "should be able to delete file")
+
+	// 3. Add a new file
+	newFilePath := filepath.Join(testFileSystemRootSearch, "newfile.txt")
+	err = os.WriteFile(newFilePath, []byte("Hello, this is a new file"), 0644)
+	assert.NoError(err, "should be able to create new file")
+
+}
+func assertSearchResults(t *testing.T, testCase testCase, server *testServer) {
+	type searchResponse struct {
+		Data   SearchResponse `json:"data"`
+		Errors []string       `json:"errors"`
+	}
+	assert := require.New(t)
+	w := makeTestHTTPRequest(server, assert, http.MethodGet, "/search", testCase.requestHeaders, nil, testCase.queryParams)
+	responseBytes := w.Body.Bytes()
+	assert.Equal(testCase.expectedStatus, w.Code, fmt.Sprintf("response gotten was %s", string(responseBytes)))
+
+	if testCase.expectedResponse == nil {
+		return
+	}
+
+	actualResponse := searchResponse{}
+	err := json.Unmarshal(responseBytes, &actualResponse)
+	assert.NoError(err, "could not unmarshal gotten response")
+
+	expectedResponseData := testCase.expectedResponse.Data.(SearchResponse)
+
+	assert.Equal(len(expectedResponseData.Results), len(actualResponse.Data.Results), "should have the expected number of results")
+
+	for i, expectedResult := range expectedResponseData.Results {
+		assert.Equal(expectedResult.Path, actualResponse.Data.Results[i].Path)
+	}
+
+	if expectedResponseData.PageDetails == (Pagination{}) {
+		return
+	}
+
+	assert.Equal(expectedResponseData.PageDetails, actualResponse.Data.PageDetails)
+
 }

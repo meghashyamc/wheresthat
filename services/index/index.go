@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
 	"time"
 
 	"github.com/meghashyamc/wheresthat/db/kvdb"
@@ -13,28 +14,32 @@ import (
 
 type Service struct {
 	logger   logger.Logger
-	searchdb searchdb.DB
+	searchDB searchdb.DB
 	kvDB     kvdb.DB
 }
 
-func New(logger logger.Logger, searchdb searchdb.DB, kvDB kvdb.DB) *Service {
+func New(logger logger.Logger, searchDB searchdb.DB, kvDB kvdb.DB) *Service {
 	return &Service{
 		logger:   logger,
-		searchdb: searchdb,
+		searchDB: searchDB,
 		kvDB:     kvDB,
 	}
 }
 
 func (s *Service) Create(rootPath string) error {
-	// Get last index time to determine if this is incremental
-	lastIndexTime, err := s.getLastIndexTime()
+
+	files, err := s.getFilesToIndex(rootPath)
 	if err != nil {
-		s.logger.Error("could not get last index time", "err", err.Error())
 		return err
 	}
 
-	files, err := s.getFilesToIndex(rootPath, lastIndexTime)
+	// Identify and remove deleted files before indexing new/modified files
+	deletedFiles, err := s.getDeletedFiles()
 	if err != nil {
+		return err
+	}
+
+	if err := s.removeDeletedFiles(deletedFiles); err != nil {
 		return err
 	}
 
@@ -43,7 +48,30 @@ func (s *Service) Create(rootPath string) error {
 		return nil
 	}
 
-	s.logger.Info("processing files...")
+	return s.buildIndex(files)
+}
+
+func (s *Service) removeDeletedFiles(deletedFiles []string) error {
+	if len(deletedFiles) == 0 {
+		return nil
+	}
+	s.logger.Info("removing deleted files from index", "deleted_files", len(deletedFiles))
+	if err := s.searchDB.DeleteDocuments(deletedFiles); err != nil {
+		s.logger.Error("failed to delete documents from search index", "err", err.Error())
+		return fmt.Errorf("failed to delete documents from search index: %w", err)
+	}
+
+	// Remove metadata for deleted files
+	for _, filePath := range deletedFiles {
+		if err := s.kvDB.Delete(filePath); err != nil {
+			s.logger.Error("failed to delete file metadata", "path", filePath, "err", err.Error())
+		}
+	}
+	return nil
+}
+
+func (s *Service) buildIndex(files []FileInfo) error {
+	s.logger.Info("building index of files...")
 	var documents []searchdb.Document
 	indexTime := time.Now().UTC()
 
@@ -62,32 +90,19 @@ func (s *Service) Create(rootPath string) error {
 	}
 
 	s.logger.Info("building search index...")
-	if err := s.searchdb.BuildIndex(documents); err != nil {
+	if err := s.searchDB.BuildIndex(documents); err != nil {
 		s.logger.Error("failed to build index", "err", err.Error())
 		return fmt.Errorf("failed to build search index: %w", err)
 	}
 
 	s.logger.Info("updating file metadata...")
-	var metadataErrors []string
 	for _, file := range files {
 		metadata := kvdb.FileMetadata{
 			LastIndexed: indexTime,
 		}
 		if err := s.setFileMetadata(file.Path, metadata); err != nil {
 			s.logger.Error("failed to update file metadata", "path", file.Path, "err", err.Error())
-			metadataErrors = append(metadataErrors, fmt.Sprintf("failed to update metadata for %s: %v", file.Path, err))
-		}
-	}
-
-	if err := s.setLastIndexTime(indexTime); err != nil {
-		s.logger.Error("failed to update last index time", "err", err.Error())
-		return fmt.Errorf("failed to update last index time: %w", err)
-	}
-
-	if len(metadataErrors) > 0 {
-		s.logger.Warn("some metadata updates failed", "errors", len(metadataErrors))
-		for _, errMsg := range metadataErrors {
-			s.logger.Warn(errMsg)
+			return fmt.Errorf("failed to update file metadata: %w", err)
 		}
 	}
 
@@ -95,10 +110,10 @@ func (s *Service) Create(rootPath string) error {
 	return nil
 }
 
-func (s *Service) getFilesToIndex(rootPath string, lastIndexTime time.Time) ([]FileInfo, error) {
+func (s *Service) getFilesToIndex(rootPath string) ([]FileInfo, error) {
 
-	s.logger.Info("performing incremental indexing", "last_index_time", lastIndexTime)
-	files, err := s.discoverModifiedFiles(rootPath, lastIndexTime)
+	s.logger.Info("performing incremental indexing")
+	files, err := s.discoverModifiedFiles(rootPath)
 	if err != nil {
 		s.logger.Error("could not discover modified files", "err", err.Error())
 		return nil, err
@@ -147,6 +162,27 @@ func (s *Service) setLastIndexTime(indexTime time.Time) error {
 	}
 
 	return s.kvDB.Set(kvdb.LastIndexTimeKey, string(timeBytes))
+}
+
+func (s *Service) getDeletedFiles() ([]string, error) {
+	allKeys, err := s.kvDB.GetAllKeys()
+	if err != nil {
+		s.logger.Error("failed to get all keys from database", "err", err.Error())
+		return nil, fmt.Errorf("failed to get all keys from database: %w", err)
+	}
+
+	var deletedFiles []string
+	for _, key := range allKeys {
+		if key == kvdb.LastIndexTimeKey {
+			continue
+		}
+
+		if _, err := os.Stat(key); os.IsNotExist(err) {
+			deletedFiles = append(deletedFiles, key)
+		}
+	}
+
+	return deletedFiles, nil
 }
 
 func (s *Service) getLastIndexTime() (time.Time, error) {

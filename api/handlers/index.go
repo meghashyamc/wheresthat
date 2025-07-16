@@ -15,8 +15,8 @@ type IndexRequest struct {
 	Path string `json:"path" validate:"required,valid_path"`
 }
 
-func SetupIndex(router *gin.Engine, logger logger.Logger, searchdb searchdb.DB, kvDB kvdb.DB, validator *validation.Validator) {
-	service := index.New(logger, searchdb, kvDB)
+func SetupIndex(router *gin.Engine, logger logger.Logger, searchDB searchdb.DB, kvDB kvdb.DB, validator *validation.Validator) {
+	service := index.New(logger, searchDB, kvDB)
 	router.POST("/index", handleCreateIndex(service, logger, validator))
 
 }

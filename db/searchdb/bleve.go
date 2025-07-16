@@ -209,6 +209,36 @@ func (b *BleveDB) buildSearchQuery(queryString string) query.Query {
 	return disjunctQuery
 }
 
+func (b *BleveDB) DeleteDocuments(documentIDs []string) error {
+	batch := b.index.NewBatch()
+
+	for i, docID := range documentIDs {
+		batch.Delete(docID)
+
+		// Execute batch when it reaches the batch size
+		if (i+1)%indexingBatchSize == 0 {
+			err := b.index.Batch(batch)
+			if err != nil {
+				return err
+			}
+			batch = b.index.NewBatch()
+		}
+	}
+
+	if batch.Size() > 0 {
+		if err := b.index.Batch(batch); err != nil {
+			b.logger.Error("could not delete documents", "err", err.Error())
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (b *BleveDB) GetDocCount() (uint64, error) {
+	return b.index.DocCount()
+}
+
 func (b *BleveDB) Close() error {
 
 	if b.index != nil {

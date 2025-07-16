@@ -7,13 +7,13 @@ import (
 
 type Service struct {
 	logger   logger.Logger
-	searchdb searchdb.DB
+	searchDB searchdb.DB
 }
 
-func New(logger logger.Logger, searchdb searchdb.DB) *Service {
+func New(logger logger.Logger, searchDB searchdb.DB) *Service {
 	return &Service{
 		logger:   logger,
-		searchdb: searchdb,
+		searchDB: searchDB,
 	}
 
 }
@@ -22,7 +22,7 @@ func (s *Service) Search(query string, limit int, offset int) (*searchdb.Respons
 	s.logger.Info("performing search", "query", query, "limit", limit, "offset", offset)
 
 	// Perform search
-	results, err := s.searchdb.Search(query, limit, offset)
+	results, err := s.searchDB.Search(query, limit, offset)
 	if err != nil {
 		s.logger.Error("search failed", "err", err.Error())
 		return nil, err

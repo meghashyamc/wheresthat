@@ -33,8 +33,8 @@ type SearchResponse struct {
 	PageDetails Pagination        `json:"page_details"`
 }
 
-func SetupSearch(router *gin.Engine, logger logger.Logger, searchdb searchdb.DB, validator *validation.Validator) {
-	service := search.New(logger, searchdb)
+func SetupSearch(router *gin.Engine, logger logger.Logger, searchDB searchdb.DB, validator *validation.Validator) {
+	service := search.New(logger, searchDB)
 	router.GET("/search", handleSearch(service, logger, validator))
 
 }

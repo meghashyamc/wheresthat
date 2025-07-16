@@ -21,8 +21,8 @@ import (
 type server struct {
 	router     *gin.Engine
 	httpServer *http.Server
-	kvdb       kvdb.DB
-	searchdb   searchdb.DB
+	kvDB       kvdb.DB
+	searchDB   searchdb.DB
 	validator  *validation.Validator
 	logger     logger.Logger
 	config     *config.Config
@@ -49,12 +49,12 @@ func Run(ctx context.Context, cfg *config.Config) error {
 
 func (s *server) setupDependencies() error {
 	var err error
-	s.kvdb, err = kvdb.New(s.logger, s.config)
+	s.kvDB, err = kvdb.New(s.logger, s.config)
 	if err != nil {
 		s.logger.Error("error creating kvDB", "err", err.Error())
 		return err
 	}
-	s.searchdb, err = searchdb.New(s.logger, s.config)
+	s.searchDB, err = searchdb.New(s.logger, s.config)
 	if err != nil {
 		s.logger.Error("error creating searchDB", "err", err.Error())
 		return err
@@ -74,7 +74,7 @@ func (s *server) setupRouter() {
 
 	router.Use(loggingMiddleware(s.logger))
 
-	setupRoutes(router, s.logger, s.searchdb, s.kvdb, s.validator)
+	setupRoutes(router, s.logger, s.searchDB, s.kvDB, s.validator)
 
 	s.router = router
 }
@@ -104,8 +104,8 @@ func (s *server) setupGracefulShutdown(ctx context.Context) {
 		shutdownCtx := context.Background()
 		shutdownCtx, cancel := context.WithTimeout(shutdownCtx, 10*time.Second)
 		defer cancel()
-		s.kvdb.Close()
-		s.searchdb.Close()
+		s.kvDB.Close()
+		s.searchDB.Close()
 		if err := s.httpServer.Shutdown(shutdownCtx); err != nil {
 			s.logger.Error("error shutting down http server", "err", err)
 			return

@@ -35,27 +35,35 @@ var createIndexHandlerTestCases = []testCase{
 		requestHeaders: defaultTestRequestHeaders,
 		requestBody:    map[string]any{"path": mustGetAbsolutePath(testFileSystemRootIndex)},
 		expectedStatus: http.StatusNoContent,
+	},
+	{
+		name:           "SuccessDuplicate",
+		requestHeaders: defaultTestRequestHeaders,
+		requestBody:    map[string]any{"path": mustGetAbsolutePath(testFileSystemRootIndex)},
+		expectedStatus: http.StatusNoContent,
 	}}
 
 func TestHandleCreateIndex(t *testing.T) {
 	assert := require.New(t)
-	router, cleanup := setupTestServer(assert, "indextest", testFileSystemRootIndex)
+	server, cleanup := setupTestServer(assert, "indextest", testFileSystemRootIndex)
 	defer cleanup()
 
 	for _, testCase := range createIndexHandlerTestCases {
 
 		t.Run(testCase.name, func(t *testing.T) {
 			assert := require.New(t)
-			w := makeTestHTTPRequest(router, assert, http.MethodPost, "/index", testCase.requestHeaders, testCase.requestBody, testCase.queryParams)
+			w := makeTestHTTPRequest(server, assert, http.MethodPost, "/index", testCase.requestHeaders, testCase.requestBody, testCase.queryParams)
 			responseBytes := w.Body.Bytes()
 			assert.Equal(testCase.expectedStatus, w.Code, fmt.Sprintf("response gotten was %s", string(responseBytes)))
 			if testCase.expectedResponse != nil {
-				var responseMap map[string]interface{}
+				var responseMap map[string]any
 				err := json.Unmarshal(responseBytes, &responseMap)
 				assert.NoError(err)
 				assert.Equal(testCase.expectedResponse, responseMap)
 			}
 		})
-
 	}
+	numOfDocuments, err := server.searchDB.GetDocCount()
+	assert.Nil(err, "could not get document count")
+	assert.Equal(len(testFiles), int(numOfDocuments), "document count of index should be equal to number of test files")
 }
