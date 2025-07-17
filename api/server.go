@@ -35,8 +35,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 
 	s := &server{
 		logger: logger.New(),
-		config: cfg,
-	}
+		config: cfg}
 	if err := s.setupDependencies(); err != nil {
 		return err
 	}

@@ -8,14 +8,22 @@ import (
 	"github.com/meghashyamc/wheresthat/db/kvdb"
 	"github.com/meghashyamc/wheresthat/db/searchdb"
 	"github.com/meghashyamc/wheresthat/logger"
+	"github.com/meghashyamc/wheresthat/ui"
 	"github.com/meghashyamc/wheresthat/validation"
 )
 
 func setupRoutes(router *gin.Engine, logger logger.Logger, searchDB searchdb.DB, kvDB kvdb.DB, validator *validation.Validator) {
 	router.GET("/health", health())
 
+	// Serve static UI files
+	router.StaticFS("/ui", http.FS(ui.Files))
+	router.GET("/", func(c *gin.Context) {
+		c.Redirect(http.StatusMovedPermanently, "/ui/index.html")
+	})
+
 	handlers.SetupIndex(router, logger, searchDB, kvDB, validator)
 	handlers.SetupSearch(router, logger, searchDB, validator)
+
 }
 
 func health() gin.HandlerFunc {

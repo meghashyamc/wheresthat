@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Where's That? - Local File Search</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Where's That?</h1>
+            <p>Local file search engine</p>
+        </header>
+
+        <main>
+            <!-- Index Section -->
+            <section class="index-section">
+                <h2>Index Files</h2>
+                <div class="form-group">
+                    <label for="folder-path">Folder Path:</label>
+                    <div class="path-input-container">
+                        <input type="text" id="folder-path" placeholder="Enter folder path (e.g., /home/user/documents)" required>
+                        <div class="dropdown-container">
+                            <button id="suggestions-btn" type="button" class="suggestions-btn">▼</button>
+                            <div id="suggestions-dropdown" class="suggestions-dropdown">
+                                <div class="dropdown-section">
+                                    <h4>Common Paths</h4>
+                                    <div class="suggestion-item" data-path="/home">Home Directory</div>
+                                    <div class="suggestion-item" data-path="/home/user">Documents</div>
+                                </div>
+                                <div class="dropdown-section" id="recent-paths-section" style="display: none;">
+                                    <h4>Recent Paths</h4>
+                                    <div id="recent-paths-container"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <button id="index-btn">Index</button>
+                </div>
+                <div id="index-status" class="status-message"></div>
+            </section>
+
+            <!-- Search Section -->
+            <section class="search-section">
+                <h2>Search Files</h2>
+                <div class="form-group">
+                    <label for="search-query">Search Query:</label>
+                    <input type="text" id="search-query" placeholder="Enter your search terms" required>
+                    <button id="search-btn">Search</button>
+                </div>
+                <div id="search-status" class="status-message"></div>
+            </section>
+
+            <!-- Results Section -->
+            <section class="results-section">
+                <div id="results-container">
+                    <!-- Search results will be populated here -->
+                </div>
+                
+                <!-- Pagination -->
+                <div id="pagination" class="pagination">
+                    <button id="prev-btn" disabled>Previous</button>
+                    <span id="page-info">Page 1 of 1</span>
+                    <button id="next-btn" disabled>Next</button>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
