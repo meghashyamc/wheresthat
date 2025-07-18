@@ -26,6 +26,12 @@ func (s *Service) discoverModifiedFiles(rootPath string) ([]FileInfo, error) {
 			return err
 		}
 
+		// Skip directories that start with '.' but not the root directory
+		if info.IsDir() && strings.HasPrefix(info.Name(), ".") && path != rootPath {
+			return filepath.SkipDir
+		}
+
+		// Skip files that start with '.' or are directories
 		if info.IsDir() || strings.HasPrefix(info.Name(), ".") {
 			return nil
 		}

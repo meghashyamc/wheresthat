@@ -104,7 +104,7 @@ func (b *BoltDB) Get(key string) (string, error) {
 
 	if err != nil {
 		if notFoundErr, ok := err.(*NotFoundError); ok {
-			b.logger.Error("key not found", "key", key)
+			b.logger.Warn("key not found", "key", key)
 			return "", notFoundErr
 		}
 		return "", err
