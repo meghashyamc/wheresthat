@@ -18,6 +18,7 @@ type Result struct {
 	Score   float64 `json:"score"`
 	Size    int64   `json:"size"`
 	ModTime string  `json:"mod_time"`
+	Snippet string  `json:"snippet"`
 }
 
 type Response struct {

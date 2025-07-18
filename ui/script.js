@@ -260,6 +260,14 @@ function createResultElement(result) {
     resultDiv.appendChild(pathDiv);
     resultDiv.appendChild(infoDiv);
     
+    // Add snippet if available
+    if (result.snippet && result.snippet.trim() !== '') {
+        const snippetDiv = document.createElement('div');
+        snippetDiv.className = 'result-snippet';
+        snippetDiv.textContent = result.snippet;
+        resultDiv.appendChild(snippetDiv);
+    }
+    
     return resultDiv;
 }
 

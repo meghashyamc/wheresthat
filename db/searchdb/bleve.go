@@ -2,6 +2,9 @@ package searchdb
 
 import (
 	"fmt"
+	"io"
+	"mime"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -10,12 +13,15 @@ import (
 	"github.com/blevesearch/bleve/v2/analysis/analyzer/keyword"
 	"github.com/blevesearch/bleve/v2/analysis/analyzer/standard"
 	"github.com/blevesearch/bleve/v2/mapping"
+	"github.com/blevesearch/bleve/v2/search"
 	"github.com/blevesearch/bleve/v2/search/query"
 	"github.com/meghashyamc/wheresthat/config"
 	"github.com/meghashyamc/wheresthat/logger"
 )
 
 const indexingBatchSize = 100
+const snippetContext = 100
+
 const (
 	indexFieldContent = "content"
 	indexFieldName    = "name"
@@ -115,6 +121,10 @@ func (b *BleveDB) Search(queryString string, limit int, offset int) (*Response, 
 
 	searchRequest.Fields = []string{indexFieldPath, indexFieldName, indexFieldSize, indexFieldModTime}
 
+	// Enable highlighting for content field
+	searchRequest.Highlight = bleve.NewHighlight()
+	searchRequest.Highlight.AddField(indexFieldContent)
+
 	searchResult, err := b.index.Search(searchRequest)
 	if err != nil {
 		b.logger.Error("search failed", "err", err.Error())
@@ -140,6 +150,9 @@ func (b *BleveDB) Search(queryString string, limit int, offset int) (*Response, 
 		if modTime, ok := hit.Fields[indexFieldModTime].(string); ok {
 			result.ModTime = modTime
 		}
+
+		// Extract snippet if content matches exist
+		result.Snippet = b.extractSnippet(result.Path, hit.Locations, queryString)
 
 		results[i] = result
 	}
@@ -248,4 +261,123 @@ func (b *BleveDB) Close() error {
 		}
 	}
 	return nil
+}
+
+func (b *BleveDB) extractSnippet(filePath string, locations search.FieldTermLocationMap, queryString string) string {
+	// Check if there are content locations from the search
+	contentLocations, hasContentMatch := locations[indexFieldContent]
+
+	if !hasContentMatch || len(contentLocations) == 0 {
+		return ""
+	}
+
+	// Check if file is text-based
+	if !b.isTextFile(filePath) {
+		return ""
+	}
+
+	// Try to read the file and extract snippet from the first location
+	snippet, err := b.readSnippetFromLocation(filePath, contentLocations, queryString)
+	if err != nil {
+		b.logger.Warn("failed to extract snippet from file", "path", filePath, "err", err.Error())
+		return ""
+	}
+
+	return snippet
+}
+
+func (b *BleveDB) isTextFile(filePath string) bool {
+	ext := strings.ToLower(filepath.Ext(filePath))
+
+	// Common text file extensions
+	textExtensions := map[string]bool{
+		".txt": true, ".md": true, ".go": true, ".js": true, ".py": true,
+		".java": true, ".cpp": true, ".c": true, ".h": true, ".css": true,
+		".html": true, ".htm": true, ".xml": true, ".json": true, ".yaml": true,
+		".yml": true, ".sh": true, ".bash": true, ".zsh": true, ".fish": true,
+		".sql": true, ".log": true, ".conf": true, ".cfg": true, ".ini": true,
+		".toml": true, ".rs": true, ".rb": true, ".php": true, ".pl": true,
+		".swift": true, ".kt": true, ".scala": true, ".clj": true, ".hs": true,
+		".ml": true, ".elm": true, ".r": true, ".m": true, ".tex": true,
+		".dockerfile": true, ".makefile": true, ".cmake": true, ".gradle": true,
+		".maven": true, ".sbt": true, ".lock": true, ".env": true, ".gitignore": true,
+		".gitattributes": true, ".editorconfig": true, ".prettierrc": true,
+		".eslintrc": true, ".babelrc": true, ".nvmrc": true, ".nodeversion": true,
+	}
+
+	if textExtensions[ext] {
+		return true
+	}
+
+	// Check MIME type as fallback
+	mimeType := mime.TypeByExtension(ext)
+	return strings.HasPrefix(mimeType, "text/")
+}
+
+func (b *BleveDB) readSnippetFromLocation(filePath string, termLocations search.TermLocationMap, queryString string) (string, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	content, err := io.ReadAll(file)
+	if err != nil {
+		return "", err
+	}
+
+	contentStr := string(content)
+
+	var matchStart, matchEnd uint64
+	found := false
+
+	// Look through all terms to find the first location
+	for _, locations := range termLocations {
+		if len(locations) > 0 && locations[0] != nil {
+			matchStart = locations[0].Start
+			matchEnd = locations[0].End
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return "", nil
+	}
+
+	if matchStart >= uint64(len(contentStr)) {
+		return "", nil
+	}
+	if matchEnd > uint64(len(contentStr)) {
+		matchEnd = uint64(len(contentStr))
+	}
+
+	// Extract snippet with context around the match
+	start := max(0, int(matchStart)-snippetContext)
+	end := min(len(contentStr), int(matchEnd)+snippetContext)
+
+	snippet := strings.TrimSpace(contentStr[start:end])
+
+	if start > 0 {
+		snippet = "..." + snippet
+	}
+	if end < len(contentStr) {
+		snippet = snippet + "..."
+	}
+
+	return snippet, nil
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
