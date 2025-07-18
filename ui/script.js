@@ -226,48 +226,70 @@ function createResultElement(result) {
     const resultDiv = document.createElement('div');
     resultDiv.className = 'result-item';
     
+    // Header with file name and open button
+    const headerDiv = document.createElement('div');
+    headerDiv.className = 'result-header';
+    
+    const nameDiv = document.createElement('div');
+    nameDiv.className = 'result-name';
+    nameDiv.textContent = result.name || 'Unknown file';
+    
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'copy-path-btn'; // Updated class name for styling
+    copyBtn.textContent = 'Copy Path';
+    // Pass the button element itself to the handler for feedback
+    copyBtn.onclick = (e) => copyFilePath(result.path, e.target);
+    
+    headerDiv.appendChild(nameDiv);
+    headerDiv.appendChild(copyBtn);
+    
+    // Path display
     const pathDiv = document.createElement('div');
     pathDiv.className = 'result-path';
     pathDiv.textContent = result.path || 'Unknown path';
     
-    const contentDiv = document.createElement('div');
-    contentDiv.className = 'result-content';
+    // File info
+    const infoDiv = document.createElement('div');
+    infoDiv.className = 'result-info';
+    infoDiv.innerHTML = `
+        <span class="result-size">Size: ${formatFileSize(result.size || 0)}</span>
+        ${result.mod_time ? `<span class="result-time">Modified: ${result.mod_time}</span>` : ''}
+    `;
     
-    if (result.content) {
-        contentDiv.innerHTML = highlightSearchTerms(result.content, currentQuery);
-    } else {
-        contentDiv.textContent = 'No content preview available';
-    }
-    
+    resultDiv.appendChild(headerDiv);
     resultDiv.appendChild(pathDiv);
-    resultDiv.appendChild(contentDiv);
+    resultDiv.appendChild(infoDiv);
     
     return resultDiv;
 }
 
-// Highlight search terms in content
-function highlightSearchTerms(content, query) {
-    if (!query) return content;
-    
-    const escapedContent = content.replace(/[&<>"']/g, function(m) {
-        return {
-            '&': '&amp;',
-            '<': '&lt;',
-            '>': '&gt;',
-            '"': '&quot;',
-            "'": '&#39;'
-        }[m];
+function copyFilePath(filePath, buttonElement) {
+    navigator.clipboard.writeText(filePath).then(() => {
+        // Save the original text and disable the button
+        const originalText = buttonElement.textContent;
+        buttonElement.textContent = 'Copied!';
+        buttonElement.disabled = true;
+
+        // Change the text back after 2 seconds
+        setTimeout(() => {
+            buttonElement.textContent = originalText;
+            buttonElement.disabled = false;
+        }, 2000);
+    }).catch(err => {
+        console.error('Failed to copy: ', err);
+        alert('Failed to copy path automatically. Please check browser permissions.');
     });
+}
+
+// Format file size function
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 B';
     
-    const words = query.split(/\s+/).filter(word => word.length > 0);
-    let highlightedContent = escapedContent;
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
     
-    words.forEach(word => {
-        const regex = new RegExp(`(${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-        highlightedContent = highlightedContent.replace(regex, '<span class="result-highlight">$1</span>');
-    });
-    
-    return highlightedContent;
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
 
 // Update pagination controls

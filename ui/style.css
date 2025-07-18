@@ -14,9 +14,7 @@
     --error: #f85149;
     --warning: #d29922;
     --success: #3fb950;
-    --highlight: #ffd33d;
-    --highlight-bg: #4d4106;
-}
+    }
 
 * {
     margin: 0;
@@ -190,26 +188,70 @@ section h2 {
     background: var(--bg-hover);
 }
 
-.result-path {
+.result-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    gap: 12px;
+}
+
+.result-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 16px;
+    flex: 1;
+}
+
+.copy-path-btn {
+    padding: 8px 16px;
+    background: var(--accent-primary);
+    color: var(--bg-primary);
+    border: none;
+    border-radius: 6px;
+    font-size: 12px;
     font-weight: 500;
-    color: var(--accent-primary);
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    white-space: nowrap;
+}
+
+.copy-path-btn:hover {
+    background: var(--accent-hover);
+}
+
+.copy-path-btn:disabled {
+    background: var(--accent-secondary); /* This is your green success color */
+    color: var(--text-primary);
+    cursor: not-allowed;
+}
+
+.result-path {
+    font-weight: 400;
+    color: var(--text-muted);
     margin-bottom: 8px;
-    font-size: 14px;
+    font-size: 13px;
     font-family: ui-monospace, SFMono-Regular, 'SF Mono', Consolas, 'Liberation Mono', Menlo, monospace;
 }
 
-.result-content {
+.result-info {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    font-size: 12px;
     color: var(--text-secondary);
-    font-size: 14px;
-    line-height: 1.5;
 }
 
-.result-highlight {
-    background: var(--highlight-bg);
-    color: var(--highlight);
-    padding: 2px 4px;
-    border-radius: 4px;
-    font-weight: 500;
+.result-info > span {
+    white-space: nowrap;
+}
+
+.result-size {
+    color: var(--text-secondary);
+}
+
+.result-time {
+    color: var(--text-muted);
 }
 
 .pagination {
@@ -293,6 +335,25 @@ section h2 {
     
     .pagination button {
         width: 100%;
+    }
+    
+    .result-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+    
+    .result-name {
+        font-size: 14px;
+    }
+    
+    .copy-path-btn {
+        width: 100%;
+    }
+    
+    .result-info {
+        flex-direction: column;
+        gap: 8px;
     }
 }
 
