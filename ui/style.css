@@ -390,13 +390,13 @@ section h2 {
     background: var(--border-secondary);
 }
 
-.path-input-container {
+.path-input-container, .search-input-container {
     position: relative;
     display: flex;
     flex: 1;
 }
 
-.path-input-container input {
+.path-input-container input, .search-input-container input {
     flex: 1;
     border-top-right-radius: 0;
     border-bottom-right-radius: 0;
@@ -486,11 +486,11 @@ section h2 {
 
 /* Responsive updates */
 @media (max-width: 768px) {
-    .path-input-container {
+    .path-input-container, .search-input-container {
         flex-direction: column;
     }
     
-    .path-input-container input {
+    .path-input-container input, .search-input-container input {
         border-radius: 8px;
         border-right: 1px solid var(--border-primary);
         margin-bottom: 8px;

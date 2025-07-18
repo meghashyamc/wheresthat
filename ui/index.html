@@ -46,7 +46,18 @@
                 <h2>Search Files</h2>
                 <div class="form-group">
                     <label for="search-query">Search Query:</label>
-                    <input type="text" id="search-query" placeholder="Enter your search terms" required>
+                    <div class="search-input-container">
+                        <input type="text" id="search-query" placeholder="Enter your search terms" required>
+                        <div class="dropdown-container">
+                            <button id="recent-searches-btn" type="button" class="suggestions-btn">▼</button>
+                            <div id="recent-searches-dropdown" class="suggestions-dropdown">
+                                <div class="dropdown-section" id="recent-searches-section" style="display: none;">
+                                    <h4>Recent Searches</h4>
+                                    <div id="recent-searches-container"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     <button id="search-btn">Search</button>
                 </div>
                 <div id="search-status" class="status-message"></div>

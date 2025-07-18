@@ -7,6 +7,7 @@ let currentQuery = '';
 let totalPages = 1;
 let isLoading = false;
 let recentPaths = JSON.parse(localStorage.getItem('recentPaths')) || [];
+let recentSearches = JSON.parse(localStorage.getItem('recentSearches')) || [];
 
 // DOM Elements
 const folderPathInput = document.getElementById('folder-path');
@@ -18,6 +19,10 @@ const indexBtn = document.getElementById('index-btn');
 const indexStatus = document.getElementById('index-status');
 
 const searchQueryInput = document.getElementById('search-query');
+const recentSearchesBtn = document.getElementById('recent-searches-btn');
+const recentSearchesDropdown = document.getElementById('recent-searches-dropdown');
+const recentSearchesSection = document.getElementById('recent-searches-section');
+const recentSearchesContainer = document.getElementById('recent-searches-container');
 const searchBtn = document.getElementById('search-btn');
 const searchStatus = document.getElementById('search-status');
 
@@ -35,15 +40,20 @@ document.addEventListener('DOMContentLoaded', function() {
     prevBtn.addEventListener('click', (e) => handlePrevPage(e));
     nextBtn.addEventListener('click', (e) => handleNextPage(e));
     suggestionsBtn.addEventListener('click', toggleSuggestions);
+    recentSearchesBtn.addEventListener('click', toggleRecentSearches);
     
     // Setup suggestion items
     setupSuggestionItems();
     updateRecentPaths();
+    updateRecentSearches();
     
     // Close dropdown when clicking outside
     document.addEventListener('click', function(e) {
         if (!suggestionsDropdown.contains(e.target) && !suggestionsBtn.contains(e.target)) {
             suggestionsDropdown.classList.remove('active');
+        }
+        if (!recentSearchesDropdown.contains(e.target) && !recentSearchesBtn.contains(e.target)) {
+            recentSearchesDropdown.classList.remove('active');
         }
     });
     
@@ -120,6 +130,44 @@ function addToRecentPaths(path) {
     }
 }
 
+// Toggle recent searches dropdown
+function toggleRecentSearches() {
+    recentSearchesDropdown.classList.toggle('active');
+}
+
+// Update recent searches
+function updateRecentSearches() {
+    if (recentSearches.length > 0) {
+        recentSearchesSection.style.display = 'block';
+        recentSearchesContainer.innerHTML = '';
+        
+        recentSearches.forEach(search => {
+            const item = document.createElement('div');
+            item.className = 'suggestion-item';
+            item.textContent = search;
+            item.addEventListener('click', function() {
+                searchQueryInput.value = search;
+                recentSearchesDropdown.classList.remove('active');
+            });
+            recentSearchesContainer.appendChild(item);
+        });
+    } else {
+        recentSearchesSection.style.display = 'none';
+    }
+}
+
+// Add to recent searches
+function addToRecentSearches(query) {
+    if (query && !recentSearches.includes(query)) {
+        recentSearches.unshift(query);
+        if (recentSearches.length > 5) {
+            recentSearches.pop();
+        }
+        localStorage.setItem('recentSearches', JSON.stringify(recentSearches));
+        updateRecentSearches();
+    }
+}
+
 // Index functionality
 async function handleIndex() {
     const folderPath = folderPathInput.value.trim();
@@ -186,6 +234,8 @@ async function handleSearch(page = 1) {
             currentPage = page;
             displayResults(data);
             hideStatus(searchStatus);
+            // Add to recent searches only on successful search
+            addToRecentSearches(query);
         } else {
             showStatus(searchStatus, `Error: ${data.errors ? data.errors.join(', ') : 'Search failed'}`, 'error');
         }
