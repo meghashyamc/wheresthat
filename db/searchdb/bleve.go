@@ -277,7 +277,7 @@ func (b *BleveDB) extractSnippet(filePath string, locations search.FieldTermLoca
 	}
 
 	// Try to read the file and extract snippet from the first location
-	snippet, err := b.readSnippetFromLocation(filePath, contentLocations, queryString)
+	snippet, err := b.readSnippetFromLocation(filePath, contentLocations)
 	if err != nil {
 		b.logger.Warn("failed to extract snippet from file", "path", filePath, "err", err.Error())
 		return ""
@@ -314,19 +314,21 @@ func (b *BleveDB) isTextFile(filePath string) bool {
 	return strings.HasPrefix(mimeType, "text/")
 }
 
-func (b *BleveDB) readSnippetFromLocation(filePath string, termLocations search.TermLocationMap, queryString string) (string, error) {
+func (b *BleveDB) readSnippetFromLocation(filePath string, termLocations search.TermLocationMap) (string, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
+		b.logger.Error("failed to open file for snippet", "path", filePath, "err", err.Error())
 		return "", err
 	}
 	defer file.Close()
 
-	content, err := io.ReadAll(file)
+	// Get file size to avoid reading beyond the file
+	fileInfo, err := file.Stat()
 	if err != nil {
+		b.logger.Error("failed to get file info for snippet", "path", filePath, "err", err.Error())
 		return "", err
 	}
-
-	contentStr := string(content)
+	fileSize := fileInfo.Size()
 
 	var matchStart, matchEnd uint64
 	found := false
@@ -342,42 +344,49 @@ func (b *BleveDB) readSnippetFromLocation(filePath string, termLocations search.
 	}
 
 	if !found {
+		b.logger.Error("no match found for snippet", "path", filePath)
 		return "", nil
 	}
 
-	if matchStart >= uint64(len(contentStr)) {
+	if matchStart >= uint64(fileSize) {
+		b.logger.Error("match start is beyond file size for snippet", "path", filePath, "matchStart", matchStart, "fileSize", fileSize)
 		return "", nil
 	}
-	if matchEnd > uint64(len(contentStr)) {
-		matchEnd = uint64(len(contentStr))
+	if matchEnd > uint64(fileSize) {
+		b.logger.Error("match end is beyond file size for snippet", "path", filePath, "matchEnd", matchEnd, "fileSize", fileSize)
+		matchEnd = uint64(fileSize)
 	}
 
-	// Extract snippet with context around the match
-	start := max(0, int(matchStart)-snippetContext)
-	end := min(len(contentStr), int(matchEnd)+snippetContext)
+	// Calculate snippet boundaries with context
+	snippetStart := max(0, int64(matchStart)-int64(snippetContext))
+	snippetEnd := min(fileSize, int64(matchEnd)+int64(snippetContext))
 
-	snippet := strings.TrimSpace(contentStr[start:end])
+	// Calculate buffer size needed
+	bufferSize := snippetEnd - snippetStart
+	if bufferSize <= 0 {
+		b.logger.Error("invalid buffer size for snippet", "path", filePath, "snippetStart", snippetStart, "snippetEnd", snippetEnd)
+		return "", nil
+	}
 
-	if start > 0 {
+	// Read only the snippet portion using ReadAt
+	buffer := make([]byte, bufferSize)
+	_, err = file.ReadAt(buffer, snippetStart)
+	if err != nil && err != io.EOF {
+		b.logger.Error("failed to read file for snippet", "path", filePath, "err", err.Error())
+		return "", err
+	}
+
+	return formatSnippet(string(buffer), snippetStart, snippetEnd, fileSize), nil
+}
+
+func formatSnippet(snippet string, snippetStart int64, snippetEnd int64, fileSize int64) string {
+	snippet = strings.TrimSpace(snippet)
+	if snippetStart > 0 {
 		snippet = "..." + snippet
 	}
-	if end < len(contentStr) {
+	if snippetEnd < fileSize {
 		snippet = snippet + "..."
 	}
 
-	return snippet, nil
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
+	return snippet
 }
