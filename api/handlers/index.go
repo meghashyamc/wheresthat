@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -15,10 +16,9 @@ type IndexRequest struct {
 	Path string `json:"path" validate:"required,valid_path"`
 }
 
-func SetupIndex(router *gin.Engine, logger logger.Logger, searchDB searchdb.DB, kvDB kvdb.DB, validator *validation.Validator) {
-	service := index.New(logger, searchDB, kvDB)
+func SetupIndex(ctx context.Context, router *gin.Engine, logger logger.Logger, searchDB searchdb.DB, kvDB kvdb.DB, validator *validation.Validator) {
+	service := index.New(ctx, logger, searchDB, kvDB)
 	router.POST("/index", handleCreateIndex(service, logger, validator))
-
 }
 
 func handleCreateIndex(index *index.Service, logger logger.Logger, validator *validation.Validator) gin.HandlerFunc {
@@ -38,12 +38,7 @@ func handleCreateIndex(index *index.Service, logger logger.Logger, validator *va
 			return
 		}
 
-		if err := index.Create(request.Path); err != nil {
-			logger.Warn("could not create index", "err", err.Error())
-			c.Abort()
-			writeResponse(c, nil, http.StatusInternalServerError, []string{err.Error()})
-			return
-		}
+		index.Create(request.Path)
 
 		writeResponse(c, nil, http.StatusNoContent, nil)
 	}

@@ -39,7 +39,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	if err := s.setupDependencies(); err != nil {
 		return err
 	}
-	s.setupRouter()
+	s.setupRouter(ctx)
 	s.setupHTTPServer()
 	s.setupGracefulShutdown(ctx)
 
@@ -68,12 +68,12 @@ func (s *server) setupDependencies() error {
 
 }
 
-func (s *server) setupRouter() {
+func (s *server) setupRouter(ctx context.Context) {
 	router := newRouter()
 
 	router.Use(loggingMiddleware(s.logger))
 
-	setupRoutes(router, s.logger, s.searchDB, s.kvDB, s.validator)
+	setupRoutes(ctx, router, s.logger, s.searchDB, s.kvDB, s.validator)
 
 	s.router = router
 }
@@ -99,12 +99,11 @@ func (s *server) setupGracefulShutdown(ctx context.Context) {
 	go func() {
 		defer wg.Done()
 		<-ctx.Done()
+		s.closeDependencies()
 		s.logger.Info("starting to shut down http server")
 		shutdownCtx := context.Background()
 		shutdownCtx, cancel := context.WithTimeout(shutdownCtx, 10*time.Second)
 		defer cancel()
-		s.kvDB.Close()
-		s.searchDB.Close()
 		if err := s.httpServer.Shutdown(shutdownCtx); err != nil {
 			s.logger.Error("error shutting down http server", "err", err)
 			return
@@ -113,4 +112,13 @@ func (s *server) setupGracefulShutdown(ctx context.Context) {
 	}()
 
 	wg.Wait()
+}
+
+func (s *server) closeDependencies() {
+	if err := s.kvDB.Close(); err != nil {
+		s.logger.Error("error closing kvDB", "err", err.Error())
+	}
+	if err := s.searchDB.Close(); err != nil {
+		s.logger.Error("error closing searchDB", "err", err.Error())
+	}
 }

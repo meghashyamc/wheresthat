@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -12,7 +13,7 @@ import (
 	"github.com/meghashyamc/wheresthat/validation"
 )
 
-func setupRoutes(router *gin.Engine, logger logger.Logger, searchDB searchdb.DB, kvDB kvdb.DB, validator *validation.Validator) {
+func setupRoutes(ctx context.Context, router *gin.Engine, logger logger.Logger, searchDB searchdb.DB, kvDB kvdb.DB, validator *validation.Validator) {
 	router.GET("/health", health())
 
 	// Serve static UI files
@@ -21,7 +22,7 @@ func setupRoutes(router *gin.Engine, logger logger.Logger, searchDB searchdb.DB,
 		c.Redirect(http.StatusMovedPermanently, "/ui/index.html")
 	})
 
-	handlers.SetupIndex(router, logger, searchDB, kvDB, validator)
+	handlers.SetupIndex(ctx, router, logger, searchDB, kvDB, validator)
 	handlers.SetupSearch(router, logger, searchDB, validator)
 
 }

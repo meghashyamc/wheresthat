@@ -1,6 +1,7 @@
 package index
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -13,21 +14,50 @@ import (
 )
 
 type Service struct {
-	logger   logger.Logger
-	searchDB searchdb.DB
-	kvDB     kvdb.DB
+	logger       logger.Logger
+	searchDB     searchdb.DB
+	kvDB         kvdb.DB
+	createIndexC chan string
 }
 
-func New(logger logger.Logger, searchDB searchdb.DB, kvDB kvdb.DB) *Service {
-	return &Service{
-		logger:   logger,
-		searchDB: searchDB,
-		kvDB:     kvDB,
+func New(ctx context.Context, logger logger.Logger, searchDB searchdb.DB, kvDB kvdb.DB) *Service {
+	indexService := &Service{
+		logger:       logger,
+		searchDB:     searchDB,
+		kvDB:         kvDB,
+		createIndexC: make(chan string, 100),
 	}
+
+	go indexService.create(ctx)
+	return indexService
 }
 
-func (s *Service) Create(rootPath string) error {
+func (s *Service) Create(rootPath string) {
+	s.createIndexC <- rootPath
+}
 
+func (s *Service) create(ctx context.Context) {
+
+	if r := recover(); r != nil {
+		s.logger.Error("index service faced an unexpected issue", "err", r)
+		s.create(ctx)
+	}
+
+	for {
+		select {
+		case rootPath := <-s.createIndexC:
+			if err := s.createIndex(rootPath); err != nil {
+				s.logger.Error("failed to create index", "err", err.Error())
+			}
+		case <-ctx.Done():
+			s.logger.Info("index service stopped")
+			return
+		}
+	}
+
+}
+
+func (s *Service) createIndex(rootPath string) error {
 	files, err := s.getFilesToIndex(rootPath)
 	if err != nil {
 		return err

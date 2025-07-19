@@ -3,6 +3,7 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -78,7 +79,9 @@ func setupTestServer(assert *require.Assertions, testEnv string, testFileSystemR
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 
-	SetupIndex(router, testLogger, searchDB, kvDB, validator)
+	ctx := context.Background()
+
+	SetupIndex(ctx, router, testLogger, searchDB, kvDB, validator)
 	SetupSearch(router, testLogger, searchDB, validator)
 
 	cleanup := func() {
