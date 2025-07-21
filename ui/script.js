@@ -203,7 +203,7 @@ async function handleIndex() {
         
         if (response.ok) {
             const data = await response.json();
-            currentIndexRequestID = data.request_id;
+            currentIndexRequestID = data.data.request_id;
             
             // Start polling for progress
             startPolling(folderPath);
@@ -408,7 +408,7 @@ function startPolling(folderPath) {
             const data = await response.json();
             
             if (response.ok) {
-                const status = data.status;
+                const status = data.data.status;
                 updateProgress(status);
                 
                 if (status >= 100) {
