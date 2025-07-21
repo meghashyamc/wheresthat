@@ -4,4 +4,4 @@ server:
 database:
   kvdb_path: "/indextest/kv.db"
   index_path: "/indextest/search.index"
-  storage_path: "./.wheresthatstorage"
+  storage_path: "./.wheresthatstorage/test"

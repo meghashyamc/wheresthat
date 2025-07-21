@@ -11,10 +11,6 @@ var (
 	ErrInvalidKey = errors.New("invalid key")
 )
 
-const (
-	LastIndexTimeKey = "__last_index_time__"
-)
-
 type InvalidKeyError struct {
 	Key    string
 	Reason string

@@ -8,6 +8,8 @@ let totalPages = 1;
 let isLoading = false;
 let recentPaths = JSON.parse(localStorage.getItem('recentPaths')) || [];
 let recentSearches = JSON.parse(localStorage.getItem('recentSearches')) || [];
+let currentIndexRequestID = null;
+let pollingInterval = null;
 
 // DOM Elements
 const folderPathInput = document.getElementById('folder-path');
@@ -17,6 +19,9 @@ const recentPathsSection = document.getElementById('recent-paths-section');
 const recentPathsContainer = document.getElementById('recent-paths-container');
 const indexBtn = document.getElementById('index-btn');
 const indexStatus = document.getElementById('index-status');
+const indexProgressContainer = document.getElementById('index-progress-container');
+const indexProgressBar = document.getElementById('index-progress-bar');
+const indexProgressText = document.getElementById('index-progress-text');
 
 const searchQueryInput = document.getElementById('search-query');
 const recentSearchesBtn = document.getElementById('recent-searches-btn');
@@ -181,7 +186,9 @@ async function handleIndex() {
     
     isLoading = true;
     indexBtn.disabled = true;
-    showStatus(indexStatus, 'Indexing files...', 'loading');
+    hideStatus(indexStatus);
+    showProgressBar();
+    updateProgress(0);
     
     try {
         const response = await fetch(`${API_BASE_URL}/index`, {
@@ -194,17 +201,22 @@ async function handleIndex() {
             })
         });
         
-        
         if (response.ok) {
-            showStatus(indexStatus, `Successfully indexed files from ${folderPath}`, 'success');
-            addToRecentPaths(folderPath);
+            const data = await response.json();
+            currentIndexRequestID = data.request_id;
+            
+            // Start polling for progress
+            startPolling(folderPath);
         } else {
             const data = await response.json();
-            showStatus(indexStatus, `Error: ${data.errors ? data.errors.join(', ') : 'Failed to index files'}`, 'error');
+            hideProgressBar();
+            showStatus(indexStatus, `Error: ${data.errors ? data.errors.join(', ') : 'Failed to start indexing'}`, 'error');
+            isLoading = false;
+            indexBtn.disabled = false;
         }
     } catch (error) {
+        hideProgressBar();
         showStatus(indexStatus, `Error: ${error.message}`, 'error');
-    } finally {
         isLoading = false;
         indexBtn.disabled = false;
     }
@@ -367,5 +379,71 @@ function handlePrevPage() {
 function handleNextPage() {
     if (currentPage < totalPages) {
         handleSearch(currentPage + 1);
+    }
+}
+
+// Progress bar functions
+function showProgressBar() {
+    indexProgressContainer.style.display = 'block';
+}
+
+function hideProgressBar() {
+    indexProgressContainer.style.display = 'none';
+}
+
+function updateProgress(percentage) {
+    indexProgressBar.style.width = `${percentage}%`;
+    indexProgressText.textContent = `${percentage}%`;
+}
+
+// Polling functions
+function startPolling(folderPath) {
+    if (pollingInterval) {
+        clearInterval(pollingInterval);
+    }
+    
+    pollingInterval = setInterval(async () => {
+        try {
+            const response = await fetch(`${API_BASE_URL}/index/${currentIndexRequestID}`);
+            const data = await response.json();
+            
+            if (response.ok) {
+                const status = data.status;
+                updateProgress(status);
+                
+                if (status >= 100) {
+                    // Indexing complete
+                    stopPolling();
+                    hideProgressBar();
+                    showStatus(indexStatus, `Successfully indexed files from ${folderPath}`, 'success');
+                    addToRecentPaths(folderPath);
+                    isLoading = false;
+                    indexBtn.disabled = false;
+                    currentIndexRequestID = null;
+                }
+            } else {
+                // Handle error case
+                stopPolling();
+                hideProgressBar();
+                showStatus(indexStatus, 'Error checking indexing progress', 'error');
+                isLoading = false;
+                indexBtn.disabled = false;
+                currentIndexRequestID = null;
+            }
+        } catch (error) {
+            stopPolling();
+            hideProgressBar();
+            showStatus(indexStatus, `Error: ${error.message}`, 'error');
+            isLoading = false;
+            indexBtn.disabled = false;
+            currentIndexRequestID = null;
+        }
+    }, 2000); // Poll every 2 seconds
+}
+
+function stopPolling() {
+    if (pollingInterval) {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
     }
 }

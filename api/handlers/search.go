@@ -45,7 +45,7 @@ func handleSearch(service *search.Service, logger logger.Logger, validator *vali
 		if err := c.ShouldBindQuery(&request); err != nil {
 			logger.Warn("could not extract expected params from search request", "err", err.Error())
 			c.Abort()
-			writeResponse(c, nil, http.StatusUnprocessableEntity, []string{"failed to extract request body parameters"})
+			writeResponse(c, nil, http.StatusUnprocessableEntity, []string{"failed to extract query parameters"})
 			return
 		}
 		request.setDefaults()

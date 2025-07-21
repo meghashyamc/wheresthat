@@ -262,7 +262,8 @@ func TestHandleSearch(t *testing.T) {
 		"path": mustGetAbsolutePath(testFileSystemRootSearch),
 	}
 	w := makeTestHTTPRequest(server, assert, http.MethodPost, "/index", defaultTestRequestHeaders, indexRequestBody, nil)
-	assert.Equal(http.StatusNoContent, w.Code, "index creation should succeed before running search tests")
+	assert.Equal(http.StatusAccepted, w.Code, "index creation should succeed before running search tests")
+	assertSuccessfulIndexCreation(assert, server, w.Body.Bytes())
 
 	for _, testCase := range searchHandlerTestCases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -273,7 +274,9 @@ func TestHandleSearch(t *testing.T) {
 	// Testing scenario where the index is created multiple times with and without file changes
 	// Call /index with the same request body again
 	w = makeTestHTTPRequest(server, assert, http.MethodPost, "/index", defaultTestRequestHeaders, indexRequestBody, nil)
-	assert.Equal(http.StatusNoContent, w.Code, "duplicate index creation should succeed")
+	assert.Equal(http.StatusAccepted, w.Code, "duplicate index creation should succeed")
+	assertSuccessfulIndexCreation(assert, server, w.Body.Bytes())
+
 	t.Run(searchBeforeFileChanges.name, func(t *testing.T) {
 		assertSearchResults(t, searchBeforeFileChanges, server)
 	})
@@ -282,7 +285,8 @@ func TestHandleSearch(t *testing.T) {
 
 	// Call /index with the same request body again after file changes
 	w = makeTestHTTPRequest(server, assert, http.MethodPost, "/index", defaultTestRequestHeaders, indexRequestBody, nil)
-	assert.Equal(http.StatusNoContent, w.Code, "duplicate index creation should succeed")
+	assert.Equal(http.StatusAccepted, w.Code, "duplicate index creation should succeed")
+	assertSuccessfulIndexCreation(assert, server, w.Body.Bytes())
 
 	// Try searching after file changes
 	t.Run(searchAfterFileChanges.name, func(t *testing.T) {

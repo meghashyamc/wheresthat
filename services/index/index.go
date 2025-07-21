@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/meghashyamc/wheresthat/db/kvdb"
@@ -13,11 +15,26 @@ import (
 	"github.com/meghashyamc/wheresthat/logger"
 )
 
+const (
+	ProgressStatusStep1    = 25
+	ProgressStatusStep2    = 50
+	ProgressStatusStep3    = 75
+	ProgressStatusComplete = 100
+
+	requestKeyPrefix = "request:"
+	fileKeyPrefix    = "file:"
+)
+
 type Service struct {
 	logger       logger.Logger
 	searchDB     searchdb.DB
 	kvDB         kvdb.DB
-	createIndexC chan string
+	createIndexC chan indexRequest
+}
+
+type indexRequest struct {
+	rootPath  string
+	requestID string
 }
 
 func New(ctx context.Context, logger logger.Logger, searchDB searchdb.DB, kvDB kvdb.DB) *Service {
@@ -25,15 +42,41 @@ func New(ctx context.Context, logger logger.Logger, searchDB searchdb.DB, kvDB k
 		logger:       logger,
 		searchDB:     searchDB,
 		kvDB:         kvDB,
-		createIndexC: make(chan string, 100),
+		createIndexC: make(chan indexRequest, 100),
 	}
 
 	go indexService.create(ctx)
 	return indexService
 }
 
-func (s *Service) Create(rootPath string) {
-	s.createIndexC <- rootPath
+// Create creates an index or incrementally updates it if it already exists
+func (s *Service) Create(rootPath string, requestID string) error {
+	// Initialize request status to 0
+	if err := s.setRequestStatus(requestID, 0); err != nil {
+		return fmt.Errorf("failed to initialize request status: %w", err)
+	}
+
+	s.createIndexC <- indexRequest{
+		rootPath:  rootPath,
+		requestID: requestID,
+	}
+	return nil
+}
+
+// GetStatus retrieves the progress status for index creation
+func (s *Service) GetStatus(requestID string) (int, error) {
+	key := requestKeyPrefix + requestID
+	value, err := s.kvDB.Get(key)
+	if err != nil {
+		return 0, fmt.Errorf("request not found: %w", err)
+	}
+
+	status, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, fmt.Errorf("invalid status value: %w", err)
+	}
+
+	return status, nil
 }
 
 func (s *Service) create(ctx context.Context) {
@@ -45,9 +88,9 @@ func (s *Service) create(ctx context.Context) {
 
 	for {
 		select {
-		case rootPath := <-s.createIndexC:
-			if err := s.createIndex(rootPath); err != nil {
-				s.logger.Error("failed to create index", "err", err.Error())
+		case req := <-s.createIndexC:
+			if err := s.createIndex(req.rootPath, req.requestID); err != nil {
+				s.logger.Error("failed to create index", "request_id", req.requestID, "err", err.Error())
 			}
 		case <-ctx.Done():
 			s.logger.Info("index service stopped")
@@ -57,10 +100,15 @@ func (s *Service) create(ctx context.Context) {
 
 }
 
-func (s *Service) createIndex(rootPath string) error {
+func (s *Service) createIndex(rootPath string, requestID string) error {
 	files, err := s.getFilesToIndex(rootPath)
 	if err != nil {
 		return err
+	}
+
+	// Update progress to ProgressStatusStep1% after getFilesToIndex completes
+	if err := s.setRequestStatus(requestID, ProgressStatusStep1); err != nil {
+		s.logger.Error("failed to update request status", "requestID", requestID, "progress", ProgressStatusStep1, "err", err.Error())
 	}
 
 	// Identify and remove deleted files before indexing new/modified files
@@ -73,12 +121,21 @@ func (s *Service) createIndex(rootPath string) error {
 		return err
 	}
 
+	// Update progress to ProgressStatusStep2% after getDeletedFiles and removeDeletedFiles complete
+	if err := s.setRequestStatus(requestID, ProgressStatusStep2); err != nil {
+		s.logger.Error("failed to update request status", "requestID", requestID, "progress", ProgressStatusStep2, "err", err.Error())
+	}
+
 	if len(files) == 0 {
 		s.logger.Info("no files to index")
+		// Mark as complete if no files to index
+		if err := s.setRequestStatus(requestID, ProgressStatusComplete); err != nil {
+			s.logger.Error("failed to update request status", "requestID", requestID, "progress", 100, "err", err.Error())
+		}
 		return nil
 	}
 
-	return s.buildIndex(files)
+	return s.buildIndex(files, requestID)
 }
 
 func (s *Service) removeDeletedFiles(deletedFiles []string) error {
@@ -93,14 +150,14 @@ func (s *Service) removeDeletedFiles(deletedFiles []string) error {
 
 	// Remove metadata for deleted files
 	for _, filePath := range deletedFiles {
-		if err := s.kvDB.Delete(filePath); err != nil {
+		if err := s.kvDB.Delete(fileKeyPrefix + filePath); err != nil {
 			s.logger.Error("failed to delete file metadata", "path", filePath, "err", err.Error())
 		}
 	}
 	return nil
 }
 
-func (s *Service) buildIndex(files []FileInfo) error {
+func (s *Service) buildIndex(files []FileInfo, requestID string) error {
 	s.logger.Info("building index of files...")
 	var documents []searchdb.Document
 	indexTime := time.Now().UTC()
@@ -119,6 +176,11 @@ func (s *Service) buildIndex(files []FileInfo) error {
 		documents = append(documents, *doc)
 	}
 
+	// Update progress to ProgressStatusStep3% after for loop completes but before BuildIndex
+	if err := s.setRequestStatus(requestID, ProgressStatusStep3); err != nil {
+		s.logger.Error("failed to update request status", "requestID", requestID, "progress", ProgressStatusStep3, "err", err.Error())
+	}
+
 	s.logger.Info("building search index...")
 	if err := s.searchDB.BuildIndex(documents); err != nil {
 		s.logger.Error("failed to build index", "err", err.Error())
@@ -134,6 +196,11 @@ func (s *Service) buildIndex(files []FileInfo) error {
 			s.logger.Error("failed to update file metadata", "path", file.Path, "err", err.Error())
 			return fmt.Errorf("failed to update file metadata: %w", err)
 		}
+	}
+
+	// Update progress to 100% after index building completes
+	if err := s.setRequestStatus(requestID, ProgressStatusComplete); err != nil {
+		s.logger.Error("failed to update request status", "requestID", requestID, "progress", 100, "err", err.Error())
 	}
 
 	s.logger.Info("index built successfully!", "indexed_files", len(files))
@@ -165,12 +232,12 @@ func (s *Service) setFileMetadata(filepath string, metadata kvdb.FileMetadata) e
 		return fmt.Errorf("failed to marshal metadata for %s: %w", filepath, err)
 	}
 
-	return s.kvDB.Set(filepath, string(data))
+	return s.kvDB.Set(fileKeyPrefix+filepath, string(data))
 }
 
 func (s *Service) getFileMetadata(filepath string) (*kvdb.FileMetadata, error) {
 
-	value, err := s.kvDB.Get(filepath)
+	value, err := s.kvDB.Get(fileKeyPrefix + filepath)
 	if err != nil {
 		return nil, err
 	}
@@ -184,16 +251,6 @@ func (s *Service) getFileMetadata(filepath string) (*kvdb.FileMetadata, error) {
 	return &metadata, nil
 }
 
-func (s *Service) setLastIndexTime(indexTime time.Time) error {
-	timeBytes, err := indexTime.MarshalBinary()
-	if err != nil {
-		s.logger.Error("failed to marshal index time", "time", indexTime, "err", err.Error())
-		return fmt.Errorf("failed to marshal index time: %w", err)
-	}
-
-	return s.kvDB.Set(kvdb.LastIndexTimeKey, string(timeBytes))
-}
-
 func (s *Service) getDeletedFiles() ([]string, error) {
 	allKeys, err := s.kvDB.GetAllKeys()
 	if err != nil {
@@ -203,30 +260,21 @@ func (s *Service) getDeletedFiles() ([]string, error) {
 
 	var deletedFiles []string
 	for _, key := range allKeys {
-		if key == kvdb.LastIndexTimeKey {
+		// Skip non-file keys
+		if !strings.HasPrefix(key, fileKeyPrefix) {
 			continue
 		}
 
-		if _, err := os.Stat(key); os.IsNotExist(err) {
-			deletedFiles = append(deletedFiles, key)
+		filePath := strings.TrimPrefix(key, fileKeyPrefix)
+		if _, err := os.Stat(filePath); os.IsNotExist(err) {
+			deletedFiles = append(deletedFiles, filePath)
 		}
 	}
 
 	return deletedFiles, nil
 }
 
-func (s *Service) getLastIndexTime() (time.Time, error) {
-	value, err := s.kvDB.Get(kvdb.LastIndexTimeKey)
-	if err != nil {
-		// Return zero time if not found (first time indexing)
-		return time.Time{}, nil
-	}
-
-	var indexTime time.Time
-	if err := indexTime.UnmarshalBinary([]byte(value)); err != nil {
-		s.logger.Error("failed to unmarshal index time", "err", err.Error())
-		return time.Time{}, fmt.Errorf("failed to unmarshal index time: %w", err)
-	}
-
-	return indexTime, nil
+func (s *Service) setRequestStatus(requestID string, status int) error {
+	key := requestKeyPrefix + requestID
+	return s.kvDB.Set(key, strconv.Itoa(status))
 }

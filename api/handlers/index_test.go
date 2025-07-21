@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
 
@@ -34,13 +36,13 @@ var createIndexHandlerTestCases = []testCase{
 		name:           "Success",
 		requestHeaders: defaultTestRequestHeaders,
 		requestBody:    map[string]any{"path": mustGetAbsolutePath(testFileSystemRootIndex)},
-		expectedStatus: http.StatusNoContent,
+		expectedStatus: http.StatusAccepted,
 	},
 	{
 		name:           "SuccessDuplicate",
 		requestHeaders: defaultTestRequestHeaders,
 		requestBody:    map[string]any{"path": mustGetAbsolutePath(testFileSystemRootIndex)},
-		expectedStatus: http.StatusNoContent,
+		expectedStatus: http.StatusAccepted,
 	}}
 
 func TestHandleCreateIndex(t *testing.T) {
@@ -61,9 +63,37 @@ func TestHandleCreateIndex(t *testing.T) {
 				assert.NoError(err)
 				assert.Equal(testCase.expectedResponse, responseMap)
 			}
+
+			if testCase.expectedStatus == http.StatusAccepted {
+				assertSuccessfulIndexCreation(assert, server, responseBytes)
+			}
 		})
 	}
+
 	numOfDocuments, err := server.searchDB.GetDocCount()
 	assert.Nil(err, "could not get document count")
 	assert.Equal(len(testFiles), int(numOfDocuments), "document count of index should be equal to number of test files")
+}
+
+func assertSuccessfulIndexCreation(assert *require.Assertions, server *testServer, responseBytes []byte) {
+
+	type indexResponse struct {
+		Data   IndexResponse `json:"data"`
+		Errors []string      `json:"errors"`
+	}
+	actualResponse := indexResponse{}
+	err := json.Unmarshal(responseBytes, &actualResponse)
+	assert.NoError(err, "could not unmarshal gotten response")
+	requestID, err := uuid.Parse(actualResponse.Data.ID)
+	assert.NoError(err, "got an error parsing gotten request_id into UUID")
+
+	maxWaitForIndexCreation := 10 * time.Second
+
+	for startTime := time.Now().UTC(); time.Since(startTime) < maxWaitForIndexCreation; time.Sleep(500 * time.Millisecond) {
+		w := makeTestHTTPRequest(server, assert, http.MethodGet, fmt.Sprintf("/index/%s", requestID), nil, nil, nil)
+		if w.Code == http.StatusOK {
+			return
+		}
+	}
+	assert.Fail("timed out waiting for index creation: ", requestID.String())
 }
