@@ -16,6 +16,7 @@ import (
 	"github.com/meghashyamc/wheresthat/db/kvdb"
 	"github.com/meghashyamc/wheresthat/db/searchdb"
 	"github.com/meghashyamc/wheresthat/logger"
+	"github.com/meghashyamc/wheresthat/services/index"
 	"github.com/meghashyamc/wheresthat/validation"
 	"github.com/stretchr/testify/require"
 )
@@ -31,9 +32,9 @@ var testFiles = map[string]string{
 }
 
 type testServer struct {
-	router   *gin.Engine
-	kvDB     kvdb.DB
-	searchDB searchdb.DB
+	router  *gin.Engine
+	kvDB    kvdb.DB
+	indexer index.Indexer
 }
 
 type testCase struct {
@@ -97,9 +98,9 @@ func setupTestServer(assert *require.Assertions, testEnv string, testFileSystemR
 	}
 
 	return &testServer{
-		router:   router,
-		searchDB: searchDB,
-		kvDB:     kvDB,
+		router:  router,
+		kvDB:    kvDB,
+		indexer: searchDB,
 	}, cleanup
 }
 

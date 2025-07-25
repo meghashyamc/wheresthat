@@ -6,14 +6,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/meghashyamc/wheresthat/api/handlers"
-	"github.com/meghashyamc/wheresthat/db/kvdb"
-	"github.com/meghashyamc/wheresthat/db/searchdb"
-	"github.com/meghashyamc/wheresthat/logger"
 	"github.com/meghashyamc/wheresthat/ui"
-	"github.com/meghashyamc/wheresthat/validation"
 )
 
-func setupRoutes(ctx context.Context, router *gin.Engine, logger logger.Logger, searchDB searchdb.DB, kvDB kvdb.DB, validator *validation.Validator) {
+func (s *server) setupRoutes(ctx context.Context, router *gin.Engine) {
 	router.GET("/health", health())
 
 	// Serve static UI files
@@ -22,8 +18,8 @@ func setupRoutes(ctx context.Context, router *gin.Engine, logger logger.Logger, 
 		c.Redirect(http.StatusMovedPermanently, "/ui/index.html")
 	})
 
-	handlers.SetupIndex(ctx, router, logger, searchDB, kvDB, validator)
-	handlers.SetupSearch(router, logger, searchDB, validator)
+	handlers.SetupIndex(ctx, router, s.logger, s.indexer, s.kvDB, s.validator)
+	handlers.SetupSearch(router, s.logger, s.searcher, s.validator)
 
 }
 

@@ -15,6 +15,13 @@ import (
 	"github.com/meghashyamc/wheresthat/logger"
 )
 
+// Indexer represents the search database operations needed for index creation
+type Indexer interface {
+	BuildIndex(documents []searchdb.Document) error
+	DeleteDocuments(documentIDs []string) error
+	Close() error
+}
+
 const (
 	ProgressStatusStep1    = 25
 	ProgressStatusStep2    = 50
@@ -26,10 +33,10 @@ const (
 )
 
 type Service struct {
-	logger       logger.Logger
-	searchDB     searchdb.DB
-	kvDB         kvdb.DB
-	createIndexC chan indexRequest
+	logger      logger.Logger
+	indexer     Indexer
+	kvDB        kvdb.DB
+	buildIndexC chan indexRequest
 }
 
 type indexRequest struct {
@@ -37,26 +44,26 @@ type indexRequest struct {
 	requestID string
 }
 
-func New(ctx context.Context, logger logger.Logger, searchDB searchdb.DB, kvDB kvdb.DB) *Service {
+func New(ctx context.Context, logger logger.Logger, indexer Indexer, kvDB kvdb.DB) *Service {
 	indexService := &Service{
-		logger:       logger,
-		searchDB:     searchDB,
-		kvDB:         kvDB,
-		createIndexC: make(chan indexRequest, 100),
+		logger:      logger,
+		indexer:     indexer,
+		kvDB:        kvDB,
+		buildIndexC: make(chan indexRequest, 100),
 	}
 
-	go indexService.create(ctx)
+	go indexService.build(ctx)
 	return indexService
 }
 
-// Create creates an index or incrementally updates it if it already exists
-func (s *Service) Create(rootPath string, requestID string) error {
+// Create builds an index or incrementally updates it if it already exists
+func (s *Service) Build(rootPath string, requestID string) error {
 	// Initialize request status to 0
 	if err := s.setRequestStatus(requestID, 0); err != nil {
 		return fmt.Errorf("failed to initialize request status: %w", err)
 	}
 
-	s.createIndexC <- indexRequest{
+	s.buildIndexC <- indexRequest{
 		rootPath:  rootPath,
 		requestID: requestID,
 	}
@@ -79,17 +86,17 @@ func (s *Service) GetStatus(requestID string) (int, error) {
 	return status, nil
 }
 
-func (s *Service) create(ctx context.Context) {
+func (s *Service) build(ctx context.Context) {
 
 	if r := recover(); r != nil {
 		s.logger.Error("index service faced an unexpected issue", "err", r)
-		s.create(ctx)
+		s.build(ctx)
 	}
 
 	for {
 		select {
-		case req := <-s.createIndexC:
-			if err := s.createIndex(req.rootPath, req.requestID); err != nil {
+		case req := <-s.buildIndexC:
+			if err := s.buildIndex(req.rootPath, req.requestID); err != nil {
 				s.logger.Error("failed to create index", "request_id", req.requestID, "err", err.Error())
 			}
 		case <-ctx.Done():
@@ -100,7 +107,7 @@ func (s *Service) create(ctx context.Context) {
 
 }
 
-func (s *Service) createIndex(rootPath string, requestID string) error {
+func (s *Service) buildIndex(rootPath string, requestID string) error {
 	files, err := s.getFilesToIndex(rootPath)
 	if err != nil {
 		return err
@@ -135,7 +142,7 @@ func (s *Service) createIndex(rootPath string, requestID string) error {
 		return nil
 	}
 
-	return s.buildIndex(files, requestID)
+	return s.doBuildIndex(files, requestID)
 }
 
 func (s *Service) removeDeletedFiles(deletedFiles []string) error {
@@ -143,7 +150,7 @@ func (s *Service) removeDeletedFiles(deletedFiles []string) error {
 		return nil
 	}
 	s.logger.Info("removing deleted files from index", "deleted_files", len(deletedFiles))
-	if err := s.searchDB.DeleteDocuments(deletedFiles); err != nil {
+	if err := s.indexer.DeleteDocuments(deletedFiles); err != nil {
 		s.logger.Error("failed to delete documents from search index", "err", err.Error())
 		return fmt.Errorf("failed to delete documents from search index: %w", err)
 	}
@@ -157,7 +164,7 @@ func (s *Service) removeDeletedFiles(deletedFiles []string) error {
 	return nil
 }
 
-func (s *Service) buildIndex(files []FileInfo, requestID string) error {
+func (s *Service) doBuildIndex(files []FileInfo, requestID string) error {
 	s.logger.Info("building index of files...")
 	var documents []searchdb.Document
 	indexTime := time.Now().UTC()
@@ -182,7 +189,7 @@ func (s *Service) buildIndex(files []FileInfo, requestID string) error {
 	}
 
 	s.logger.Info("building search index...")
-	if err := s.searchDB.BuildIndex(documents); err != nil {
+	if err := s.indexer.BuildIndex(documents); err != nil {
 		s.logger.Error("failed to build index", "err", err.Error())
 		return fmt.Errorf("failed to build search index: %w", err)
 	}

@@ -7,7 +7,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/meghashyamc/wheresthat/db/kvdb"
-	"github.com/meghashyamc/wheresthat/db/searchdb"
 	"github.com/meghashyamc/wheresthat/logger"
 	"github.com/meghashyamc/wheresthat/services/index"
 	"github.com/meghashyamc/wheresthat/validation"
@@ -30,8 +29,8 @@ type IndexStatusResponse struct {
 	ID     string `json:"request_id"`
 }
 
-func SetupIndex(ctx context.Context, router *gin.Engine, logger logger.Logger, searchDB searchdb.DB, kvDB kvdb.DB, validator *validation.Validator) {
-	service := index.New(ctx, logger, searchDB, kvDB)
+func SetupIndex(ctx context.Context, router *gin.Engine, logger logger.Logger, indexer index.Indexer, kvDB kvdb.DB, validator *validation.Validator) {
+	service := index.New(ctx, logger, indexer, kvDB)
 	router.POST("/index", handleCreateIndex(service, logger, validator))
 	router.GET("/index/:request_id", handleGetIndexStatus(service, logger, validator))
 }
@@ -55,7 +54,7 @@ func handleCreateIndex(indexService *index.Service, logger logger.Logger, valida
 
 		requestID := uuid.New().String()
 
-		if err := indexService.Create(request.Path, requestID); err != nil {
+		if err := indexService.Build(request.Path, requestID); err != nil {
 			logger.Error("failed to create index", "err", err.Error())
 			writeResponse(c, nil, http.StatusInternalServerError, []string{"failed to start indexing"})
 			return

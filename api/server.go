@@ -15,6 +15,8 @@ import (
 	"github.com/meghashyamc/wheresthat/db/kvdb"
 	"github.com/meghashyamc/wheresthat/db/searchdb"
 	"github.com/meghashyamc/wheresthat/logger"
+	"github.com/meghashyamc/wheresthat/services/index"
+	"github.com/meghashyamc/wheresthat/services/search"
 	"github.com/meghashyamc/wheresthat/validation"
 )
 
@@ -22,7 +24,8 @@ type server struct {
 	router     *gin.Engine
 	httpServer *http.Server
 	kvDB       kvdb.DB
-	searchDB   searchdb.DB
+	searcher   search.Searcher
+	indexer    index.Indexer
 	validator  *validation.Validator
 	logger     logger.Logger
 	config     *config.Config
@@ -53,11 +56,15 @@ func (s *server) setupDependencies() error {
 		s.logger.Error("error creating kvDB", "err", err.Error())
 		return err
 	}
-	s.searchDB, err = searchdb.New(s.logger, s.config)
+
+	searchDB, err := searchdb.New(s.logger, s.config)
 	if err != nil {
 		s.logger.Error("error creating searchDB", "err", err.Error())
 		return err
 	}
+	s.searcher = searchDB
+	s.indexer = searchDB
+
 	s.validator, err = validation.New(s.logger)
 	if err != nil {
 		s.logger.Error("error creating validator", "err", err.Error())
@@ -73,9 +80,10 @@ func (s *server) setupRouter(ctx context.Context) {
 
 	router.Use(loggingMiddleware(s.logger))
 
-	setupRoutes(ctx, router, s.logger, s.searchDB, s.kvDB, s.validator)
+	s.setupRoutes(ctx, router)
 
 	s.router = router
+
 }
 
 func (s *server) setupHTTPServer() {
@@ -118,7 +126,7 @@ func (s *server) closeDependencies() {
 	if err := s.kvDB.Close(); err != nil {
 		s.logger.Error("error closing kvDB", "err", err.Error())
 	}
-	if err := s.searchDB.Close(); err != nil {
+	if err := s.indexer.Close(); err != nil {
 		s.logger.Error("error closing searchDB", "err", err.Error())
 	}
 }

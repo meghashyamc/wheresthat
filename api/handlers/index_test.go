@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/meghashyamc/wheresthat/db/searchdb"
 	"github.com/stretchr/testify/require"
 )
 
@@ -70,7 +71,7 @@ func TestHandleCreateIndex(t *testing.T) {
 		})
 	}
 
-	numOfDocuments, err := server.searchDB.GetDocCount()
+	numOfDocuments, err := server.indexer.(*searchdb.BleveDB).GetDocCount()
 	assert.Nil(err, "could not get document count")
 	assert.Equal(len(testFiles), int(numOfDocuments), "document count of index should be equal to number of test files")
 }

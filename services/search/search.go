@@ -5,24 +5,28 @@ import (
 	"github.com/meghashyamc/wheresthat/logger"
 )
 
-type Service struct {
-	logger   logger.Logger
-	searchDB searchdb.DB
+// Searcher represents the search database operations needed for search functionality
+type Searcher interface {
+	Search(queryString string, limit int, offset int) (*searchdb.Response, error)
 }
 
-func New(logger logger.Logger, searchDB searchdb.DB) *Service {
+type Service struct {
+	logger   logger.Logger
+	searcher Searcher
+}
+
+func New(logger logger.Logger, searcher Searcher) *Service {
 	return &Service{
 		logger:   logger,
-		searchDB: searchDB,
+		searcher: searcher,
 	}
-
 }
 
 func (s *Service) Search(query string, limit int, offset int) (*searchdb.Response, error) {
 	s.logger.Info("performing search", "query", query, "limit", limit, "offset", offset)
 
 	// Perform search
-	results, err := s.searchDB.Search(query, limit, offset)
+	results, err := s.searcher.Search(query, limit, offset)
 	if err != nil {
 		s.logger.Error("search failed", "err", err.Error())
 		return nil, err
