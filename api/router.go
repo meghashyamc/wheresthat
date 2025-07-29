@@ -18,7 +18,7 @@ func (s *server) setupRoutes(ctx context.Context, router *gin.Engine) {
 		c.Redirect(http.StatusMovedPermanently, "/ui/index.html")
 	})
 
-	handlers.SetupIndex(ctx, router, s.logger, s.indexer, s.kvDB, s.validator)
+	handlers.SetupIndex(ctx, router, s.logger, s.indexer, s.metadataStore, s.validator)
 	handlers.SetupSearch(router, s.logger, s.searcher, s.validator)
 
 }

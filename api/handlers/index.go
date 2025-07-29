@@ -6,7 +6,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/meghashyamc/wheresthat/db/kvdb"
 	"github.com/meghashyamc/wheresthat/logger"
 	"github.com/meghashyamc/wheresthat/services/index"
 	"github.com/meghashyamc/wheresthat/validation"
@@ -29,8 +28,8 @@ type IndexStatusResponse struct {
 	ID     string `json:"request_id"`
 }
 
-func SetupIndex(ctx context.Context, router *gin.Engine, logger logger.Logger, indexer index.Indexer, kvDB kvdb.DB, validator *validation.Validator) {
-	service := index.New(ctx, logger, indexer, kvDB)
+func SetupIndex(ctx context.Context, router *gin.Engine, logger logger.Logger, indexer index.Indexer, metadataStore index.MetadataStore, validator *validation.Validator) {
+	service := index.New(ctx, logger, indexer, metadataStore)
 	router.POST("/index", handleCreateIndex(service, logger, validator))
 	router.GET("/index/:request_id", handleGetIndexStatus(service, logger, validator))
 }

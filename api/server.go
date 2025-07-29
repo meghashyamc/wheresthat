@@ -21,14 +21,14 @@ import (
 )
 
 type server struct {
-	router     *gin.Engine
-	httpServer *http.Server
-	kvDB       kvdb.DB
-	searcher   search.Searcher
-	indexer    index.Indexer
-	validator  *validation.Validator
-	logger     logger.Logger
-	config     *config.Config
+	router        *gin.Engine
+	httpServer    *http.Server
+	metadataStore index.MetadataStore
+	searcher      search.Searcher
+	indexer       index.Indexer
+	validator     *validation.Validator
+	logger        logger.Logger
+	config        *config.Config
 }
 
 func Run(ctx context.Context, cfg *config.Config) error {
@@ -51,7 +51,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 
 func (s *server) setupDependencies() error {
 	var err error
-	s.kvDB, err = kvdb.New(s.logger, s.config)
+	s.metadataStore, err = kvdb.New(s.logger, s.config)
 	if err != nil {
 		s.logger.Error("error creating kvDB", "err", err.Error())
 		return err
@@ -123,7 +123,7 @@ func (s *server) setupGracefulShutdown(ctx context.Context) {
 }
 
 func (s *server) closeDependencies() {
-	if err := s.kvDB.Close(); err != nil {
+	if err := s.metadataStore.Close(); err != nil {
 		s.logger.Error("error closing kvDB", "err", err.Error())
 	}
 	if err := s.indexer.Close(); err != nil {

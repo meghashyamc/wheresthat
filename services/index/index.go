@@ -33,10 +33,10 @@ const (
 )
 
 type Service struct {
-	logger      logger.Logger
-	indexer     Indexer
-	kvDB        kvdb.DB
-	buildIndexC chan indexRequest
+	logger        logger.Logger
+	indexer       Indexer
+	metadataStore MetadataStore
+	buildIndexC   chan indexRequest
 }
 
 type indexRequest struct {
@@ -44,12 +44,12 @@ type indexRequest struct {
 	requestID string
 }
 
-func New(ctx context.Context, logger logger.Logger, indexer Indexer, kvDB kvdb.DB) *Service {
+func New(ctx context.Context, logger logger.Logger, indexer Indexer, metadataStore MetadataStore) *Service {
 	indexService := &Service{
-		logger:      logger,
-		indexer:     indexer,
-		kvDB:        kvDB,
-		buildIndexC: make(chan indexRequest, 100),
+		logger:        logger,
+		indexer:       indexer,
+		metadataStore: metadataStore,
+		buildIndexC:   make(chan indexRequest, 100),
 	}
 
 	go indexService.build(ctx)
@@ -73,7 +73,7 @@ func (s *Service) Build(rootPath string, requestID string) error {
 // GetStatus retrieves the progress status for index creation
 func (s *Service) GetStatus(requestID string) (int, error) {
 	key := requestKeyPrefix + requestID
-	value, err := s.kvDB.Get(key)
+	value, err := s.metadataStore.Get(key)
 	if err != nil {
 		return 0, fmt.Errorf("request not found: %w", err)
 	}
@@ -157,7 +157,7 @@ func (s *Service) removeDeletedFiles(deletedFiles []string) error {
 
 	// Remove metadata for deleted files
 	for _, filePath := range deletedFiles {
-		if err := s.kvDB.Delete(fileKeyPrefix + filePath); err != nil {
+		if err := s.metadataStore.Delete(fileKeyPrefix + filePath); err != nil {
 			s.logger.Error("failed to delete file metadata", "path", filePath, "err", err.Error())
 		}
 	}
@@ -239,12 +239,12 @@ func (s *Service) setFileMetadata(filepath string, metadata kvdb.FileMetadata) e
 		return fmt.Errorf("failed to marshal metadata for %s: %w", filepath, err)
 	}
 
-	return s.kvDB.Set(fileKeyPrefix+filepath, string(data))
+	return s.metadataStore.Set(fileKeyPrefix+filepath, string(data))
 }
 
 func (s *Service) getFileMetadata(filepath string) (*kvdb.FileMetadata, error) {
 
-	value, err := s.kvDB.Get(fileKeyPrefix + filepath)
+	value, err := s.metadataStore.Get(fileKeyPrefix + filepath)
 	if err != nil {
 		return nil, err
 	}
@@ -259,7 +259,7 @@ func (s *Service) getFileMetadata(filepath string) (*kvdb.FileMetadata, error) {
 }
 
 func (s *Service) getDeletedFiles() ([]string, error) {
-	allKeys, err := s.kvDB.GetAllKeys()
+	allKeys, err := s.metadataStore.GetAllKeys()
 	if err != nil {
 		s.logger.Error("failed to get all keys from database", "err", err.Error())
 		return nil, fmt.Errorf("failed to get all keys from database: %w", err)
@@ -283,5 +283,5 @@ func (s *Service) getDeletedFiles() ([]string, error) {
 
 func (s *Service) setRequestStatus(requestID string, status int) error {
 	key := requestKeyPrefix + requestID
-	return s.kvDB.Set(key, strconv.Itoa(status))
+	return s.metadataStore.Set(key, strconv.Itoa(status))
 }

@@ -33,7 +33,7 @@ var testFiles = map[string]string{
 
 type testServer struct {
 	router  *gin.Engine
-	kvDB    kvdb.DB
+	kvDB    index.MetadataStore
 	indexer index.Indexer
 }
 

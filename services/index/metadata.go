@@ -1,6 +1,6 @@
-package kvdb
+package index
 
-type DB interface {
+type MetadataStore interface {
 	Set(key string, value string) error
 	Get(key string) (string, error)
 	Delete(key string) error
