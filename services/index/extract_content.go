@@ -19,7 +19,13 @@ func extractContent(fileInfo FileInfo) (*searchdb.Document, error) {
 	}
 
 	if fileInfo.IsText {
-		content, err := readTextFile(fileInfo.Path)
+
+		file, err := os.Open(fileInfo.Path)
+		if err != nil {
+			return nil, err
+		}
+		defer file.Close()
+		content, err := readTextContent(file, fileInfo.Size)
 		if err != nil {
 			return nil, err
 		}
@@ -29,30 +35,16 @@ func extractContent(fileInfo FileInfo) (*searchdb.Document, error) {
 	return doc, nil
 }
 
-func readTextFile(path string) (string, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return "", err
-	}
-	defer file.Close()
+func readTextContent(reader io.Reader, fileSize int64) (string, error) {
+	limitedReader := reader
 
-	stat, err := file.Stat()
-	if err != nil {
-		return "", err
+	if fileSize > maxContentExtractionSize {
+		// Limit reader to maxContentExtractionSize bytes
+		limitedReader = io.LimitReader(reader, maxContentExtractionSize)
 	}
 
-	if stat.Size() > maxContentExtractionSize {
-		// For large files, read only first portion
-		buffer := make([]byte, maxContentExtractionSize)
-		n, err := file.Read(buffer)
-		if err != nil && err != io.EOF {
-			return "", err
-		}
-		return string(buffer[:n]), nil
-	}
-
-	// Read entire file for smaller files
-	content, err := io.ReadAll(file)
+	// Read entire content for smaller files
+	content, err := io.ReadAll(limitedReader)
 	if err != nil {
 		return "", err
 	}
