@@ -23,7 +23,10 @@ func (s *Service) discoverModifiedFiles(rootPath string) ([]FileInfo, error) {
 
 	err := filepath.Walk(rootPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			return err
+			s.logger.Error("could not walk through file or directory", "err", err.Error())
+			if !errors.Is(err, os.ErrPermission) {
+				return err
+			}
 		}
 
 		// Skip directories that start with '.' but not the root directory

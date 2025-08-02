@@ -23,16 +23,8 @@ func (e *InvalidKeyError) Error() string {
 	return fmt.Sprintf("invalid key %s: %s", e.Key, e.Reason)
 }
 
-func (e *InvalidKeyError) Is(target error) bool {
-	return target == ErrInvalidKey
-}
-
 func (e *NotFoundError) Error() string {
 	return fmt.Sprintf("key not found: %s", e.Key)
-}
-
-func (e *NotFoundError) Is(target error) bool {
-	return target == ErrNotFound
 }
 
 type FileMetadata struct {

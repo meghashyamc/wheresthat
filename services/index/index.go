@@ -27,6 +27,7 @@ const (
 	ProgressStatusStep2    = 50
 	ProgressStatusStep3    = 75
 	ProgressStatusComplete = 100
+	ProgressStatusFailed   = -1
 
 	requestKeyPrefix = "request:"
 	fileKeyPrefix    = "file:"
@@ -59,9 +60,7 @@ func New(ctx context.Context, logger logger.Logger, indexer Indexer, metadataSto
 // Create builds an index or incrementally updates it if it already exists
 func (s *Service) Build(rootPath string, requestID string) error {
 	// Initialize request status to 0
-	if err := s.setRequestStatus(requestID, 0); err != nil {
-		return fmt.Errorf("failed to initialize request status: %w", err)
-	}
+	s.setRequestStatus(requestID, 0)
 
 	s.buildIndexC <- indexRequest{
 		rootPath:  rootPath,
@@ -96,9 +95,7 @@ func (s *Service) build(ctx context.Context) {
 	for {
 		select {
 		case req := <-s.buildIndexC:
-			if err := s.buildIndex(req.rootPath, req.requestID); err != nil {
-				s.logger.Error("failed to create index", "request_id", req.requestID, "err", err.Error())
-			}
+			s.buildIndex(req.rootPath, req.requestID)
 		case <-ctx.Done():
 			s.logger.Info("index service stopped")
 			return
@@ -107,42 +104,41 @@ func (s *Service) build(ctx context.Context) {
 
 }
 
-func (s *Service) buildIndex(rootPath string, requestID string) error {
+func (s *Service) buildIndex(rootPath string, requestID string) {
 	files, err := s.getFilesToIndex(rootPath)
 	if err != nil {
-		return err
+		s.logger.Error("failed to create index", "request_id", requestID, "err", err.Error())
+		s.setRequestStatus(requestID, ProgressStatusFailed)
 	}
 
 	// Update progress to ProgressStatusStep1% after getFilesToIndex completes
-	if err := s.setRequestStatus(requestID, ProgressStatusStep1); err != nil {
-		s.logger.Error("failed to update request status", "requestID", requestID, "progress", ProgressStatusStep1, "err", err.Error())
-	}
+	s.setRequestStatus(requestID, ProgressStatusStep1)
 
 	// Identify and remove deleted files before indexing new/modified files
 	deletedFiles, err := s.getDeletedFiles()
 	if err != nil {
-		return err
+		s.logger.Error("failed to create index", "request_id", requestID, "err", err.Error())
+		s.setRequestStatus(requestID, ProgressStatusFailed)
 	}
 
 	if err := s.removeDeletedFiles(deletedFiles); err != nil {
-		return err
+		s.logger.Error("failed to create index", "request_id", requestID, "err", err.Error())
+		s.setRequestStatus(requestID, ProgressStatusFailed)
 	}
 
 	// Update progress to ProgressStatusStep2% after getDeletedFiles and removeDeletedFiles complete
-	if err := s.setRequestStatus(requestID, ProgressStatusStep2); err != nil {
-		s.logger.Error("failed to update request status", "requestID", requestID, "progress", ProgressStatusStep2, "err", err.Error())
-	}
+	s.setRequestStatus(requestID, ProgressStatusStep2)
 
 	if len(files) == 0 {
 		s.logger.Info("no files to index")
 		// Mark as complete if no files to index
-		if err := s.setRequestStatus(requestID, ProgressStatusComplete); err != nil {
-			s.logger.Error("failed to update request status", "requestID", requestID, "progress", 100, "err", err.Error())
-		}
-		return nil
+		s.setRequestStatus(requestID, ProgressStatusComplete)
 	}
 
-	return s.doBuildIndex(files, requestID)
+	if err := s.doBuildIndex(files, requestID); err != nil {
+		s.logger.Error("failed to create index", "request_id", requestID, "err", err.Error())
+		s.setRequestStatus(requestID, ProgressStatusFailed)
+	}
 }
 
 func (s *Service) removeDeletedFiles(deletedFiles []string) error {
@@ -184,9 +180,7 @@ func (s *Service) doBuildIndex(files []FileInfo, requestID string) error {
 	}
 
 	// Update progress to ProgressStatusStep3% after for loop completes but before BuildIndex
-	if err := s.setRequestStatus(requestID, ProgressStatusStep3); err != nil {
-		s.logger.Error("failed to update request status", "requestID", requestID, "progress", ProgressStatusStep3, "err", err.Error())
-	}
+	s.setRequestStatus(requestID, ProgressStatusStep3)
 
 	s.logger.Info("building search index...")
 	if err := s.indexer.BuildIndex(documents); err != nil {
@@ -206,9 +200,7 @@ func (s *Service) doBuildIndex(files []FileInfo, requestID string) error {
 	}
 
 	// Update progress to 100% after index building completes
-	if err := s.setRequestStatus(requestID, ProgressStatusComplete); err != nil {
-		s.logger.Error("failed to update request status", "requestID", requestID, "progress", 100, "err", err.Error())
-	}
+	s.setRequestStatus(requestID, ProgressStatusComplete)
 
 	s.logger.Info("index built successfully!", "indexed_files", len(files))
 	return nil
@@ -219,7 +211,6 @@ func (s *Service) getFilesToIndex(rootPath string) ([]FileInfo, error) {
 	s.logger.Info("performing incremental indexing")
 	files, err := s.discoverModifiedFiles(rootPath)
 	if err != nil {
-		s.logger.Error("could not discover modified files", "err", err.Error())
 		return nil, err
 	}
 	s.logger.Info("discovered modified files", slog.Int("num_of_files", len(files)))
@@ -281,7 +272,9 @@ func (s *Service) getDeletedFiles() ([]string, error) {
 	return deletedFiles, nil
 }
 
-func (s *Service) setRequestStatus(requestID string, status int) error {
+func (s *Service) setRequestStatus(requestID string, status int) {
 	key := requestKeyPrefix + requestID
-	return s.metadataStore.Set(key, strconv.Itoa(status))
+	if err := s.metadataStore.Set(key, strconv.Itoa(status)); err != nil {
+		s.logger.Error("failed to update request status", "requestID", requestID, "progress", ProgressStatusStep1, "err", err.Error())
+	}
 }

@@ -94,10 +94,19 @@ func handleGetIndexStatus(indexService *index.Service, logger logger.Logger, val
 			ID:     request.ID,
 		}
 
-		responseStatus := http.StatusAccepted
-		if status == index.ProgressStatusComplete {
-			responseStatus = http.StatusOK
-		}
-		writeResponse(c, response, responseStatus, nil)
+		writeResponse(c, response, getResponseStatusFromServiceStatus(status), nil)
 	}
+}
+
+func getResponseStatusFromServiceStatus(status int) int {
+	responseStatus := http.StatusAccepted
+	if status == index.ProgressStatusComplete {
+		responseStatus = http.StatusOK
+	}
+
+	if status == index.ProgressStatusFailed {
+		responseStatus = http.StatusInternalServerError
+	}
+
+	return responseStatus
 }

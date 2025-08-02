@@ -438,7 +438,7 @@ function startPolling(folderPath) {
             indexBtn.disabled = false;
             currentIndexRequestID = null;
         }
-    }, 2000); // Poll every 2 seconds
+    }, 3000); // Poll every 3 seconds
 }
 
 function stopPolling() {
