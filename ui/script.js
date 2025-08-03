@@ -406,9 +406,9 @@ function startPolling(folderPath) {
         try {
             const response = await fetch(`${API_BASE_URL}/index/${currentIndexRequestID}`);
             const data = await response.json();
+            const status = data.data.status;
             
-            if (response.ok) {
-                const status = data.data.status;
+            if (response.ok && status >= 0) {
                 updateProgress(status);
                 
                 if (status >= 100) {

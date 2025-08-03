@@ -67,8 +67,10 @@ func (b *BleveDB) BuildIndex(documents []Document) error {
 		if (i+1)%indexingBatchSize == 0 {
 			err = b.index.Batch(batch)
 			if err != nil {
+				b.logger.Error("could not index document", "err", err.Error())
 				return err
 			}
+			b.logger.Info("successfully indexed batch of documents", "documents_indexed", fmt.Sprintf("%d/%d", i+1, len(documents)))
 			batch = b.index.NewBatch()
 		}
 	}
@@ -78,6 +80,7 @@ func (b *BleveDB) BuildIndex(documents []Document) error {
 			b.logger.Error("could not index document", "err", err.Error())
 			return err
 		}
+		b.logger.Info("successfully indexed last, remaining batch of documents")
 	}
 
 	return nil

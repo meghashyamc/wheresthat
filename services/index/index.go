@@ -62,6 +62,7 @@ func (s *Service) Build(rootPath string, requestID string) error {
 	// Initialize request status to 0
 	s.setRequestStatus(requestID, 0)
 
+	// Leads to s.buildIndex being called
 	s.buildIndexC <- indexRequest{
 		rootPath:  rootPath,
 		requestID: requestID,
