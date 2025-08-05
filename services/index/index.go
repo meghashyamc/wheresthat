@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"os"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -30,8 +29,6 @@ const (
 	ProgressStatusComplete = 100
 	ProgressStatusFailed   = -1
 
-	requestKeyPrefix               = "request:"
-	fileKeyPrefix                  = "file:"
 	maxGoRoutinesForFileProcessing = 50
 )
 
@@ -74,8 +71,7 @@ func (s *Service) Build(rootPath string, requestID string) error {
 
 // GetStatus retrieves the progress status for index creation
 func (s *Service) GetStatus(requestID string) (int, error) {
-	key := requestKeyPrefix + requestID
-	value, err := s.metadataStore.Get(key)
+	value, err := s.metadataStore.Get(kvdb.RequestsBucket, requestID)
 	if err != nil {
 		return 0, fmt.Errorf("request not found: %w", err)
 	}
@@ -148,7 +144,7 @@ func (s *Service) removeDeletedFiles(deletedFiles []string) error {
 
 	// Remove metadata for deleted files
 	for _, filePath := range deletedFiles {
-		if err := s.metadataStore.Delete(fileKeyPrefix + filePath); err != nil {
+		if err := s.metadataStore.Delete(kvdb.FilesBucket, filePath); err != nil {
 			s.logger.Error("failed to delete file metadata", "path", filePath, "err", err.Error())
 		}
 	}
@@ -198,9 +194,10 @@ func (s *Service) doBuildIndex(files []FileInfo, requestID string) {
 	var metadataWG sync.WaitGroup
 	metadataWG.Add(1)
 
+	// This is so that future index requests don't lead to reindexing files that
+	// are already indexed
 	go s.updateFilesMetadata(indexTime, processedFilesChan, &metadataWG)
 
-	// Wait for all goroutines to complete
 	go func() {
 		indexWG.Wait()
 		close(processedFilesChan)
@@ -233,7 +230,7 @@ func (s *Service) updateFilesMetadata(indexTime time.Time, processedFilesChan ch
 			updatedCount++
 		}
 
-		if i%100 == 0 {
+		if i%1000 == 0 {
 			s.logger.Info("updated metadata for files:", "count (out of total processed files)", fmt.Sprintf("%d/%d", i, len(allProcessedFiles)))
 		}
 	}
@@ -266,7 +263,7 @@ func (s *Service) setFileMetadata(filepath string, metadata kvdb.FileMetadata) e
 		return fmt.Errorf("failed to marshal metadata for %s: %w", filepath, err)
 	}
 
-	if err := s.metadataStore.Set(fileKeyPrefix+filepath, string(data)); err != nil {
+	if err := s.metadataStore.Set(kvdb.FilesBucket, filepath, string(data)); err != nil {
 		s.logger.Error("failed to set file metadata", "filepath", filepath, "err", err.Error())
 		return err
 	}
@@ -276,7 +273,7 @@ func (s *Service) setFileMetadata(filepath string, metadata kvdb.FileMetadata) e
 
 func (s *Service) getFileMetadata(filepath string) (*kvdb.FileMetadata, error) {
 
-	value, err := s.metadataStore.Get(fileKeyPrefix + filepath)
+	value, err := s.metadataStore.Get(kvdb.FilesBucket, filepath)
 	if err != nil {
 		return nil, err
 	}
@@ -291,7 +288,7 @@ func (s *Service) getFileMetadata(filepath string) (*kvdb.FileMetadata, error) {
 }
 
 func (s *Service) getDeletedFiles() ([]string, error) {
-	allKeys, err := s.metadataStore.GetAllKeys()
+	allKeys, err := s.metadataStore.GetAllKeys(kvdb.FilesBucket)
 	if err != nil {
 		s.logger.Error("failed to get all keys from database", "err", err.Error())
 		return nil, fmt.Errorf("failed to get all keys from database: %w", err)
@@ -299,14 +296,9 @@ func (s *Service) getDeletedFiles() ([]string, error) {
 
 	var deletedFiles []string
 	for _, key := range allKeys {
-		// Skip non-file keys
-		if !strings.HasPrefix(key, fileKeyPrefix) {
-			continue
-		}
 
-		filePath := strings.TrimPrefix(key, fileKeyPrefix)
-		if _, err := os.Stat(filePath); os.IsNotExist(err) {
-			deletedFiles = append(deletedFiles, filePath)
+		if _, err := os.Stat(key); os.IsNotExist(err) {
+			deletedFiles = append(deletedFiles, key)
 		}
 	}
 
@@ -314,8 +306,7 @@ func (s *Service) getDeletedFiles() ([]string, error) {
 }
 
 func (s *Service) setRequestStatus(requestID string, status int) {
-	key := requestKeyPrefix + requestID
-	if err := s.metadataStore.Set(key, strconv.Itoa(status)); err != nil {
+	if err := s.metadataStore.Set(kvdb.RequestsBucket, requestID, strconv.Itoa(status)); err != nil {
 		s.logger.Error("failed to update request status", "requestID", requestID, "progress", ProgressStatusStep1, "err", err.Error())
 	}
 }
@@ -323,14 +314,14 @@ func (s *Service) setRequestStatus(requestID string, status int) {
 func (s *Service) doBuildIndexForFilesPortion(filesPortion []FileInfo, goroutineID int, processedFilesChan chan []FileInfo, wg *sync.WaitGroup) {
 	defer wg.Done()
 	numOfFiles := len(filesPortion)
-
+	totalProcessedFilesCount := 0
 	for i := 0; i <= max(0, numOfFiles-searchdb.IndexingBatchSize); i += searchdb.IndexingBatchSize {
 
 		processedFiles := s.doBuildIndexForSingleBatchOfFiles(filesPortion[i:min(i+searchdb.IndexingBatchSize, numOfFiles)], goroutineID)
-		fmt.Println("processed files count for goroutine#", goroutineID, "================", len(processedFiles))
+		totalProcessedFilesCount += len(processedFiles)
 		processedFilesChan <- processedFiles
 
-		s.logger.Info(fmt.Sprintf("goroutine %d processed %d/%d files", goroutineID, len(processedFiles), numOfFiles))
+		s.logger.Info(fmt.Sprintf("goroutine %d processed %d/%d files", goroutineID, totalProcessedFilesCount, numOfFiles))
 	}
 	s.logger.Info("completed indexing for goroutine", "goroutine_id", goroutineID, "num_of_files_received", numOfFiles)
 

@@ -17,7 +17,9 @@ type BoltDB struct {
 }
 
 const (
-	boltDefaultBucket = "default"
+	BoltDefaultBucket = "default"
+	RequestsBucket    = "requests"
+	FilesBucket       = "files"
 	lastIndexTimeKey  = "__last_index_time__"
 )
 
@@ -41,7 +43,7 @@ func New(logger logger.Logger, cfg *config.Config) (*BoltDB, error) {
 		logger: logger,
 	}
 
-	if err := boltDB.initBucket(); err != nil {
+	if err := boltDB.initBuckets(); err != nil {
 		store.Close()
 		return nil, fmt.Errorf("failed to initialize bucket: %w", err)
 	}
@@ -49,9 +51,23 @@ func New(logger logger.Logger, cfg *config.Config) (*BoltDB, error) {
 	return boltDB, nil
 }
 
-func (b *BoltDB) initBucket() error {
+func (b *BoltDB) initBuckets() error {
+
+	if err := b.initBucket(BoltDefaultBucket); err != nil {
+		return err
+	}
+	if err := b.initBucket(RequestsBucket); err != nil {
+		return err
+	}
+	if err := b.initBucket(FilesBucket); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (b *BoltDB) initBucket(bucketName string) error {
 	return b.store.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists([]byte([]byte(boltDefaultBucket)))
+		_, err := tx.CreateBucketIfNotExists([]byte(bucketName))
 		if err != nil {
 			b.logger.Error("failed to create bucket", "err", err.Error())
 			return fmt.Errorf("failed to create bucket: %w", err)
@@ -60,13 +76,16 @@ func (b *BoltDB) initBucket() error {
 	})
 }
 
-func (b *BoltDB) Set(key string, value string) error {
+func (b *BoltDB) Set(bucketName string, key string, value string) error {
 	if err := b.validateKey(key); err != nil {
 		return err
 	}
 
+	if bucketName == "" {
+		bucketName = BoltDefaultBucket
+	}
 	return b.store.Update(func(tx *bolt.Tx) error {
-		bucket, err := b.getBucket(tx)
+		bucket, err := b.getBucket(tx, bucketName)
 		if err != nil {
 			return err
 		}
@@ -80,14 +99,17 @@ func (b *BoltDB) Set(key string, value string) error {
 	})
 }
 
-func (b *BoltDB) Get(key string) (string, error) {
+func (b *BoltDB) Get(bucketName string, key string) (string, error) {
 	if err := b.validateKey(key); err != nil {
 		return "", err
+	}
+	if bucketName == "" {
+		bucketName = BoltDefaultBucket
 	}
 
 	var value []byte
 	err := b.store.View(func(tx *bolt.Tx) error {
-		bucket, err := b.getBucket(tx)
+		bucket, err := b.getBucket(tx, bucketName)
 		if err != nil {
 			return err
 		}
@@ -120,13 +142,17 @@ func (b *BoltDB) Close() error {
 	return nil
 }
 
-func (b *BoltDB) Delete(key string) error {
+func (b *BoltDB) Delete(bucketName string, key string) error {
 	if err := b.validateKey(key); err != nil {
 		return err
 	}
 
+	if bucketName == "" {
+		bucketName = BoltDefaultBucket
+	}
+
 	return b.store.Update(func(tx *bolt.Tx) error {
-		bucket, err := b.getBucket(tx)
+		bucket, err := b.getBucket(tx, bucketName)
 		if err != nil {
 			return err
 		}
@@ -140,11 +166,15 @@ func (b *BoltDB) Delete(key string) error {
 	})
 }
 
-func (b *BoltDB) GetAllKeys() ([]string, error) {
+func (b *BoltDB) GetAllKeys(bucketName string) ([]string, error) {
 	var keys []string
 
+	if bucketName == "" {
+		bucketName = BoltDefaultBucket
+	}
+
 	err := b.store.View(func(tx *bolt.Tx) error {
-		bucket, err := b.getBucket(tx)
+		bucket, err := b.getBucket(tx, bucketName)
 		if err != nil {
 			return err
 		}
@@ -174,10 +204,10 @@ func (b *BoltDB) validateKey(key string) error {
 	return nil
 }
 
-func (b *BoltDB) getBucket(tx *bolt.Tx) (*bolt.Bucket, error) {
-	bucket := tx.Bucket([]byte(boltDefaultBucket))
+func (b *BoltDB) getBucket(tx *bolt.Tx, bucketName string) (*bolt.Bucket, error) {
+	bucket := tx.Bucket([]byte(bucketName))
 	if bucket == nil {
-		b.logger.Error("bucket not found", "bucket", boltDefaultBucket)
+		b.logger.Error("bucket not found", "bucket", bucketName)
 		return nil, fmt.Errorf("bucket not found")
 	}
 	return bucket, nil
