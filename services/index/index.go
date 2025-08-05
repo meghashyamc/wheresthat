@@ -23,9 +23,8 @@ type Indexer interface {
 }
 
 const (
-	ProgressStatusStep1    = 25
-	ProgressStatusStep2    = 50
-	ProgressStatusStep3    = 75
+	ProgressStatusStep1    = 10
+	ProgressStatusStep2    = 20
 	ProgressStatusComplete = 100
 	ProgressStatusFailed   = -1
 
@@ -194,17 +193,14 @@ func (s *Service) doBuildIndex(files []FileInfo, requestID string) {
 	var metadataWG sync.WaitGroup
 	metadataWG.Add(1)
 
-	// This is so that future index requests don't lead to reindexing files that
+	// This is primarily so that future index requests don't lead to reindexing files that
 	// are already indexed
-	go s.updateFilesMetadata(indexTime, processedFilesChan, &metadataWG)
+	go s.updateMetadata(indexTime, requestID, len(files), processedFilesChan, &metadataWG)
 
 	go func() {
 		indexWG.Wait()
 		close(processedFilesChan)
 	}()
-
-	// Update progress to ProgressStatusStep3% after goroutines are launched
-	s.setRequestStatus(requestID, ProgressStatusStep3)
 
 	metadataWG.Wait()
 
@@ -213,29 +209,29 @@ func (s *Service) doBuildIndex(files []FileInfo, requestID string) {
 
 }
 
-func (s *Service) updateFilesMetadata(indexTime time.Time, processedFilesChan chan []FileInfo, wg *sync.WaitGroup) {
+func (s *Service) updateMetadata(indexTime time.Time, requestID string, totalFilesCount int, processedFilesChan chan []FileInfo, wg *sync.WaitGroup) {
 	defer wg.Done()
-	var allProcessedFiles []FileInfo
-	for processedFiles := range processedFilesChan {
-		allProcessedFiles = append(allProcessedFiles, processedFiles...)
-	}
-
 	s.logger.Info("updating file metadata...")
 	updatedCount := 0
-	for i, file := range allProcessedFiles {
-		metadata := kvdb.FileMetadata{
-			LastIndexed: indexTime,
-		}
-		if err := s.setFileMetadata(file.Path, metadata); err == nil {
-			updatedCount++
-		}
 
-		if i%1000 == 0 {
-			s.logger.Info("updated metadata for files:", "count (out of total processed files)", fmt.Sprintf("%d/%d", i, len(allProcessedFiles)))
+	for processedFiles := range processedFilesChan {
+		for _, file := range processedFiles {
+			metadata := kvdb.FileMetadata{
+				LastIndexed: indexTime,
+			}
+			if err := s.setFileMetadata(file.Path, metadata); err == nil {
+				updatedCount++
+			}
+
+		}
+		if updatedCount%1000 == 0 {
+			s.logger.Info("updated metadata for files:", "count", fmt.Sprintf("%d/%d", updatedCount, totalFilesCount))
+			status := getProgressPercentage(updatedCount, totalFilesCount, ProgressStatusStep2, ProgressStatusComplete)
+			s.setRequestStatus(requestID, status)
 		}
 	}
 
-	s.logger.Info("finished updating metadata successfully!", "count(out of total processed files)", fmt.Sprintf("%d/%d", updatedCount, len(allProcessedFiles)))
+	s.logger.Info("finished updating metadata successfully!", "count", fmt.Sprintf("%d/%d", updatedCount, totalFilesCount))
 
 }
 
@@ -349,5 +345,22 @@ func (s *Service) doBuildIndexForSingleBatchOfFiles(filesInBatch []FileInfo, gor
 	}
 
 	return processedFiles
+
+}
+
+func getProgressPercentage(done int, total int, initial int, final int) int {
+	if done == 0 || total == 0 {
+		return initial
+	}
+
+	if done >= total {
+		return final
+	}
+
+	// Calculate the percentage between initial and final
+	progress := float64(done) / float64(total)
+	result := float64(initial) + progress*float64(final-initial)
+
+	return int(result)
 
 }
