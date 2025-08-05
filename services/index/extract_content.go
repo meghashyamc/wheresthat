@@ -1,13 +1,21 @@
 package index
 
 import (
+	"bytes"
 	"io"
 	"os"
+	"sync"
 
 	"github.com/meghashyamc/wheresthat/db/searchdb"
 )
 
-const maxContentExtractionSize = 50 * 1024 * 1024 // 50MB limit
+const maxContentExtractionSize = 5 * 1024 * 1024 // 5MB limit
+
+var bufferPool = sync.Pool{
+	New: func() interface{} {
+		return make([]byte, 64*1024)
+	},
+}
 
 func extractContent(fileInfo FileInfo) (*searchdb.Document, error) {
 	doc := &searchdb.Document{
@@ -29,25 +37,41 @@ func extractContent(fileInfo FileInfo) (*searchdb.Document, error) {
 		if err != nil {
 			return nil, err
 		}
-		doc.Content = content
+		doc.Content = string(content)
 	}
 
 	return doc, nil
 }
+func readTextContent(reader io.Reader, fileSize int64) ([]byte, error) {
+	// Always cap the reader to avoid trusting fileSize blindly
+	limitedReader := io.LimitReader(reader, maxContentExtractionSize)
 
-func readTextContent(reader io.Reader, fileSize int64) (string, error) {
-	limitedReader := reader
+	var buffer bytes.Buffer
 
-	if fileSize > maxContentExtractionSize {
-		// Limit reader to maxContentExtractionSize bytes
-		limitedReader = io.LimitReader(reader, maxContentExtractionSize)
+	if fileSize > 0 && fileSize <= maxContentExtractionSize {
+		buffer.Grow(int(fileSize))
+	} else {
+		buffer.Grow(maxContentExtractionSize)
 	}
 
-	// Read entire content for smaller files
-	content, err := io.ReadAll(limitedReader)
-	if err != nil {
-		return "", err
+	buf := bufferPool.Get().([]byte)
+	defer bufferPool.Put(buf)
+
+	for {
+		n, err := limitedReader.Read(buf)
+		if n > 0 {
+			_, werr := buffer.Write(buf[:n])
+			if werr != nil {
+				return nil, werr
+			}
+		}
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, err
+		}
 	}
 
-	return string(content), nil
+	return buffer.Bytes(), nil
 }

@@ -19,7 +19,7 @@ import (
 	"github.com/meghashyamc/wheresthat/logger"
 )
 
-const indexingBatchSize = 100
+const IndexingBatchSize = 100
 const snippetContext = 100
 
 const (
@@ -51,20 +51,20 @@ func New(logger logger.Logger, cfg *config.Config) (*BleveDB, error) {
 	return &BleveDB{indexPath: indexPath, logger: logger, index: index}, nil
 }
 
-func (b *BleveDB) BuildIndex(documents []Document) error {
+func (b *BleveDB) BuildIndex(documents []*Document) error {
 
 	batch := b.index.NewBatch()
 
 	for i, doc := range documents {
 
-		err := batch.Index(doc.ID, doc)
+		err := batch.Index(doc.ID, *doc)
 		if err != nil {
 			b.logger.Error("could not index document", "err", err.Error())
 			return err
 		}
 
 		// Execute batch when it reaches the batch size
-		if (i+1)%indexingBatchSize == 0 {
+		if (i+1)%IndexingBatchSize == 0 {
 			err = b.index.Batch(batch)
 			if err != nil {
 				b.logger.Error("could not index document", "err", err.Error())
@@ -233,7 +233,7 @@ func (b *BleveDB) DeleteDocuments(documentIDs []string) error {
 		batch.Delete(docID)
 
 		// Execute batch when it reaches the batch size
-		if (i+1)%indexingBatchSize == 0 {
+		if (i+1)%IndexingBatchSize == 0 {
 			err := b.index.Batch(batch)
 			if err != nil {
 				return err

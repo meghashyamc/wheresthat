@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/meghashyamc/wheresthat/db/kvdb"
@@ -17,7 +18,7 @@ import (
 
 // Indexer represents the search database operations needed for index creation
 type Indexer interface {
-	BuildIndex(documents []searchdb.Document) error
+	BuildIndex(documents []*searchdb.Document) error
 	DeleteDocuments(documentIDs []string) error
 	Close() error
 }
@@ -29,8 +30,9 @@ const (
 	ProgressStatusComplete = 100
 	ProgressStatusFailed   = -1
 
-	requestKeyPrefix = "request:"
-	fileKeyPrefix    = "file:"
+	requestKeyPrefix               = "request:"
+	fileKeyPrefix                  = "file:"
+	maxGoRoutinesForFileProcessing = 50
 )
 
 type Service struct {
@@ -130,16 +132,8 @@ func (s *Service) buildIndex(rootPath string, requestID string) {
 	// Update progress to ProgressStatusStep2% after getDeletedFiles and removeDeletedFiles complete
 	s.setRequestStatus(requestID, ProgressStatusStep2)
 
-	if len(files) == 0 {
-		s.logger.Info("no files to index")
-		// Mark as complete if no files to index
-		s.setRequestStatus(requestID, ProgressStatusComplete)
-	}
+	s.doBuildIndex(files, requestID)
 
-	if err := s.doBuildIndex(files, requestID); err != nil {
-		s.logger.Error("failed to create index", "request_id", requestID, "err", err.Error())
-		s.setRequestStatus(requestID, ProgressStatusFailed)
-	}
 }
 
 func (s *Service) removeDeletedFiles(deletedFiles []string) error {
@@ -161,50 +155,91 @@ func (s *Service) removeDeletedFiles(deletedFiles []string) error {
 	return nil
 }
 
-func (s *Service) doBuildIndex(files []FileInfo, requestID string) error {
+func (s *Service) doBuildIndex(files []FileInfo, requestID string) {
 	s.logger.Info("building index of files...")
-	var documents []searchdb.Document
 	indexTime := time.Now().UTC()
 
-	for i, file := range files {
-		if i%100 == 0 {
-			s.logger.Info(fmt.Sprintf("processed %d/%d files", i, len(files)))
-		}
-
-		doc, err := extractContent(file)
-		if err != nil {
-			s.logger.Error("error processing file", "path", file.Path, "err", err.Error())
-			continue
-		}
-
-		documents = append(documents, *doc)
+	if len(files) == 0 {
+		s.setRequestStatus(requestID, ProgressStatusComplete)
+		s.logger.Info("no files to index")
+		return
 	}
 
-	// Update progress to ProgressStatusStep3% after for loop completes but before BuildIndex
+	numGoroutines := min(maxGoRoutinesForFileProcessing, len(files))
+	filesPerGoroutine := len(files) / numGoroutines
+	if filesPerGoroutine == 0 {
+		filesPerGoroutine = 1
+	}
+
+	// Channel to collect processed files for metadata updates
+	processedFilesChan := make(chan []FileInfo, numGoroutines)
+
+	// WaitGroup to wait for all goroutines to complete
+	var indexWG sync.WaitGroup
+
+	s.logger.Info("starting parallel indexing", "goroutines", numGoroutines, "files_per_goroutine", filesPerGoroutine)
+
+	for i := range numGoroutines {
+		start := i * filesPerGoroutine
+		end := start + filesPerGoroutine
+
+		// For the last goroutine, include any remaining files
+		if i == numGoroutines-1 {
+			end = len(files)
+		}
+		if start >= len(files) {
+			break
+		}
+
+		indexWG.Add(1)
+		go s.doBuildIndexForFilesPortion(files[start:end], i, processedFilesChan, &indexWG)
+	}
+
+	var metadataWG sync.WaitGroup
+	metadataWG.Add(1)
+
+	go s.updateFilesMetadata(indexTime, processedFilesChan, &metadataWG)
+
+	// Wait for all goroutines to complete
+	go func() {
+		indexWG.Wait()
+		close(processedFilesChan)
+	}()
+
+	// Update progress to ProgressStatusStep3% after goroutines are launched
 	s.setRequestStatus(requestID, ProgressStatusStep3)
 
-	s.logger.Info("building search index...")
-	if err := s.indexer.BuildIndex(documents); err != nil {
-		s.logger.Error("failed to build index", "err", err.Error())
-		return fmt.Errorf("failed to build search index: %w", err)
+	metadataWG.Wait()
+
+	// Update progress to 100% after index building and metadata updation completes
+	s.setRequestStatus(requestID, ProgressStatusComplete)
+
+}
+
+func (s *Service) updateFilesMetadata(indexTime time.Time, processedFilesChan chan []FileInfo, wg *sync.WaitGroup) {
+	defer wg.Done()
+	var allProcessedFiles []FileInfo
+	for processedFiles := range processedFilesChan {
+		allProcessedFiles = append(allProcessedFiles, processedFiles...)
 	}
 
 	s.logger.Info("updating file metadata...")
-	for _, file := range files {
+	updatedCount := 0
+	for i, file := range allProcessedFiles {
 		metadata := kvdb.FileMetadata{
 			LastIndexed: indexTime,
 		}
-		if err := s.setFileMetadata(file.Path, metadata); err != nil {
-			s.logger.Error("failed to update file metadata", "path", file.Path, "err", err.Error())
-			return fmt.Errorf("failed to update file metadata: %w", err)
+		if err := s.setFileMetadata(file.Path, metadata); err == nil {
+			updatedCount++
+		}
+
+		if i%100 == 0 {
+			s.logger.Info("updated metadata for files:", "count (out of total processed files)", fmt.Sprintf("%d/%d", i, len(allProcessedFiles)))
 		}
 	}
 
-	// Update progress to 100% after index building completes
-	s.setRequestStatus(requestID, ProgressStatusComplete)
+	s.logger.Info("finished updating metadata successfully!", "count(out of total processed files)", fmt.Sprintf("%d/%d", updatedCount, len(allProcessedFiles)))
 
-	s.logger.Info("index built successfully!", "indexed_files", len(files))
-	return nil
 }
 
 func (s *Service) getFilesToIndex(rootPath string) ([]FileInfo, error) {
@@ -231,7 +266,12 @@ func (s *Service) setFileMetadata(filepath string, metadata kvdb.FileMetadata) e
 		return fmt.Errorf("failed to marshal metadata for %s: %w", filepath, err)
 	}
 
-	return s.metadataStore.Set(fileKeyPrefix+filepath, string(data))
+	if err := s.metadataStore.Set(fileKeyPrefix+filepath, string(data)); err != nil {
+		s.logger.Error("failed to set file metadata", "filepath", filepath, "err", err.Error())
+		return err
+	}
+
+	return nil
 }
 
 func (s *Service) getFileMetadata(filepath string) (*kvdb.FileMetadata, error) {
@@ -278,4 +318,45 @@ func (s *Service) setRequestStatus(requestID string, status int) {
 	if err := s.metadataStore.Set(key, strconv.Itoa(status)); err != nil {
 		s.logger.Error("failed to update request status", "requestID", requestID, "progress", ProgressStatusStep1, "err", err.Error())
 	}
+}
+
+func (s *Service) doBuildIndexForFilesPortion(filesPortion []FileInfo, goroutineID int, processedFilesChan chan []FileInfo, wg *sync.WaitGroup) {
+	defer wg.Done()
+	numOfFiles := len(filesPortion)
+
+	for i := 0; i <= max(0, numOfFiles-searchdb.IndexingBatchSize); i += searchdb.IndexingBatchSize {
+
+		processedFiles := s.doBuildIndexForSingleBatchOfFiles(filesPortion[i:min(i+searchdb.IndexingBatchSize, numOfFiles)], goroutineID)
+		fmt.Println("processed files count for goroutine#", goroutineID, "================", len(processedFiles))
+		processedFilesChan <- processedFiles
+
+		s.logger.Info(fmt.Sprintf("goroutine %d processed %d/%d files", goroutineID, len(processedFiles), numOfFiles))
+	}
+	s.logger.Info("completed indexing for goroutine", "goroutine_id", goroutineID, "num_of_files_received", numOfFiles)
+
+}
+
+func (s *Service) doBuildIndexForSingleBatchOfFiles(filesInBatch []FileInfo, goroutineID int) []FileInfo {
+
+	var documents []*searchdb.Document
+	var processedFiles []FileInfo
+
+	for _, file := range filesInBatch {
+
+		doc, err := extractContent(file)
+		if err != nil {
+			s.logger.Error("error processing file", "path", file.Path, "err", err.Error(), "go_routine_id", goroutineID)
+			continue
+		}
+		documents = append(documents, doc)
+		processedFiles = append(processedFiles, file)
+	}
+
+	if err := s.indexer.BuildIndex(documents); err != nil {
+		s.logger.Error("failed to build index for goroutine", "goroutine_id", goroutineID, "err", err.Error())
+		return make([]FileInfo, 0)
+	}
+
+	return processedFiles
+
 }
