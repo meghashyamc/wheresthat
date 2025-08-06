@@ -3,6 +3,7 @@ package index
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -49,7 +50,7 @@ func New(ctx context.Context, logger logger.Logger, indexer Indexer, metadataSto
 		logger:        logger,
 		indexer:       indexer,
 		metadataStore: metadataStore,
-		buildIndexC:   make(chan indexRequest, 100),
+		buildIndexC:   make(chan indexRequest),
 	}
 
 	go indexService.build(ctx)
@@ -58,15 +59,17 @@ func New(ctx context.Context, logger logger.Logger, indexer Indexer, metadataSto
 
 // Create builds an index or incrementally updates it if it already exists
 func (s *Service) Build(rootPath string, requestID string) error {
-	// Initialize request status to 0
+
 	s.setRequestStatus(requestID, 0)
 
-	// Leads to s.buildIndex being called
-	s.buildIndexC <- indexRequest{
-		rootPath:  rootPath,
-		requestID: requestID,
+	select {
+	// This leads to s.buildIndex being called
+	case s.buildIndexC <- indexRequest{rootPath: rootPath, requestID: requestID}:
+		return nil
+	default:
+		s.logger.Warn("request to index while indexing is already in progress")
+		return errors.New("indexing already in progress")
 	}
-	return nil
 }
 
 // GetStatus retrieves the progress status for index creation
@@ -98,7 +101,6 @@ func (s *Service) build(ctx context.Context) {
 			return
 		}
 	}
-
 }
 
 func (s *Service) buildIndex(ctx context.Context, rootPath string, requestID string) {

@@ -55,7 +55,7 @@ func handleCreateIndex(indexService *index.Service, logger logger.Logger, valida
 
 		if err := indexService.Build(request.Path, requestID); err != nil {
 			logger.Error("failed to create index", "err", err.Error())
-			writeResponse(c, nil, http.StatusInternalServerError, []string{"failed to start indexing"})
+			writeResponse(c, nil, http.StatusConflict, []string{"failed to start indexing, possibly because another indexing operation is in progress"})
 			return
 		}
 
