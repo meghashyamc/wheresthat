@@ -1,8 +1,8 @@
 ## Where's That?
 
-This is supposed to be a simple search engine for local files. It's currently very much a work in progress.
+This is supposed to be a simple search engine for local files.
 
-There is a web based UI that can be used to search for text a) within text files b) in file names and get search results the way we get in web search engines.
+A web based UI can be used to search for text a) within text files b) in file names and get search results the way we get in web search engines.
 
 ## Run
 
@@ -14,4 +14,3 @@ After running the binary, open `http://localhost:8080/ui` in a browser to index/
 To change default config values, checkout `config/config.local.yaml` or set relevant environment variables (refer to `config/config.go`).
 
 Note: The UI has a button to index files. Files need to be indexed before they can be searched.
-

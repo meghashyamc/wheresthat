@@ -29,6 +29,7 @@ const (
 	ProgressStatusFailed   = -1
 
 	maxGoRoutinesForFileProcessing = 50
+	maxIndexBuildingTime           = 2 * time.Hour
 )
 
 type Service struct {
@@ -85,28 +86,27 @@ func (s *Service) GetStatus(requestID string) (int, error) {
 
 func (s *Service) build(ctx context.Context) {
 
-	if r := recover(); r != nil {
-		s.logger.Error("index service faced an unexpected issue", "err", r)
-		s.build(ctx)
-	}
-
 	for {
 		select {
 		case req := <-s.buildIndexC:
-			s.buildIndex(req.rootPath, req.requestID)
+			indexTimeoutCtx, cancel := context.WithTimeout(ctx, maxIndexBuildingTime)
+			defer cancel()
+
+			s.buildIndex(indexTimeoutCtx, req.rootPath, req.requestID)
 		case <-ctx.Done():
-			s.logger.Info("index service stopped")
+			s.logger.Info("index service stopped", "reason", ctx.Err())
 			return
 		}
 	}
 
 }
 
-func (s *Service) buildIndex(rootPath string, requestID string) {
+func (s *Service) buildIndex(ctx context.Context, rootPath string, requestID string) {
 	files, err := s.getFilesToIndex(rootPath)
 	if err != nil {
 		s.logger.Error("failed to create index", "request_id", requestID, "err", err.Error())
 		s.setRequestStatus(requestID, ProgressStatusFailed)
+		return
 	}
 
 	// Update progress to ProgressStatusStep1% after getFilesToIndex completes
@@ -117,17 +117,19 @@ func (s *Service) buildIndex(rootPath string, requestID string) {
 	if err != nil {
 		s.logger.Error("failed to create index", "request_id", requestID, "err", err.Error())
 		s.setRequestStatus(requestID, ProgressStatusFailed)
+		return
 	}
 
 	if err := s.removeDeletedFiles(deletedFiles); err != nil {
 		s.logger.Error("failed to create index", "request_id", requestID, "err", err.Error())
 		s.setRequestStatus(requestID, ProgressStatusFailed)
+		return
 	}
 
 	// Update progress to ProgressStatusStep2% after getDeletedFiles and removeDeletedFiles complete
 	s.setRequestStatus(requestID, ProgressStatusStep2)
 
-	s.doBuildIndex(files, requestID)
+	s.doBuildIndex(ctx, files, requestID)
 
 }
 
@@ -150,7 +152,7 @@ func (s *Service) removeDeletedFiles(deletedFiles []string) error {
 	return nil
 }
 
-func (s *Service) doBuildIndex(files []FileInfo, requestID string) {
+func (s *Service) doBuildIndex(ctx context.Context, files []FileInfo, requestID string) {
 	s.logger.Info("building index of files...")
 	indexTime := time.Now().UTC()
 
@@ -168,7 +170,8 @@ func (s *Service) doBuildIndex(files []FileInfo, requestID string) {
 
 	// Channel to collect processed files for metadata updates
 	processedFilesChan := make(chan []FileInfo, numGoroutines)
-
+	indexCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	// WaitGroup to wait for all goroutines to complete
 	var indexWG sync.WaitGroup
 
@@ -187,15 +190,15 @@ func (s *Service) doBuildIndex(files []FileInfo, requestID string) {
 		}
 
 		indexWG.Add(1)
-		go s.doBuildIndexForFilesPortion(files[start:end], i, processedFilesChan, &indexWG)
+		go s.doBuildIndexForFilesPortion(indexCtx, files[start:end], i, processedFilesChan, &indexWG)
 	}
 
 	var metadataWG sync.WaitGroup
 	metadataWG.Add(1)
 
 	// This is primarily so that future index requests don't lead to reindexing files that
-	// are already indexed
-	go s.updateMetadata(indexTime, requestID, len(files), processedFilesChan, &metadataWG)
+	// are already indexed. This go routine terminates when `processedFilesChan` is closed.
+	go s.updateMetadata(indexCtx, indexTime, requestID, len(files), processedFilesChan, &metadataWG)
 
 	go func() {
 		indexWG.Wait()
@@ -203,13 +206,17 @@ func (s *Service) doBuildIndex(files []FileInfo, requestID string) {
 	}()
 
 	metadataWG.Wait()
+	if ctx.Err() != nil {
+		s.setRequestStatus(requestID, ProgressStatusFailed)
+		s.logger.Error("indexing cancelled", "request_id", requestID, "err", ctx.Err())
+	}
 
 	// Update progress to 100% after index building and metadata updation completes
 	s.setRequestStatus(requestID, ProgressStatusComplete)
 
 }
 
-func (s *Service) updateMetadata(indexTime time.Time, requestID string, totalFilesCount int, processedFilesChan chan []FileInfo, wg *sync.WaitGroup) {
+func (s *Service) updateMetadata(ctx context.Context, indexTime time.Time, requestID string, totalFilesCount int, processedFilesChan chan []FileInfo, wg *sync.WaitGroup) {
 	defer wg.Done()
 	s.logger.Info("updating file metadata...")
 	updatedCount := 0
@@ -230,7 +237,10 @@ func (s *Service) updateMetadata(indexTime time.Time, requestID string, totalFil
 			s.setRequestStatus(requestID, status)
 		}
 	}
-
+	if ctx.Err() != nil {
+		s.logger.Error("metadata update cancelled", "request_id", requestID, "err", ctx.Err())
+		return
+	}
 	s.logger.Info("finished updating metadata successfully!", "count", fmt.Sprintf("%d/%d", updatedCount, totalFilesCount))
 
 }
@@ -307,12 +317,17 @@ func (s *Service) setRequestStatus(requestID string, status int) {
 	}
 }
 
-func (s *Service) doBuildIndexForFilesPortion(filesPortion []FileInfo, goroutineID int, processedFilesChan chan []FileInfo, wg *sync.WaitGroup) {
+func (s *Service) doBuildIndexForFilesPortion(ctx context.Context, filesPortion []FileInfo, goroutineID int, processedFilesChan chan []FileInfo, wg *sync.WaitGroup) {
 	defer wg.Done()
 	numOfFiles := len(filesPortion)
 	totalProcessedFilesCount := 0
 	for i := 0; i <= max(0, numOfFiles-searchdb.IndexingBatchSize); i += searchdb.IndexingBatchSize {
-
+		select {
+		case <-ctx.Done():
+			s.logger.Info("goroutine cancelled", "goroutine_id", goroutineID, "reason", ctx.Err())
+			return
+		default:
+		}
 		processedFiles := s.doBuildIndexForSingleBatchOfFiles(filesPortion[i:min(i+searchdb.IndexingBatchSize, numOfFiles)], goroutineID)
 		totalProcessedFilesCount += len(processedFiles)
 		processedFilesChan <- processedFiles
