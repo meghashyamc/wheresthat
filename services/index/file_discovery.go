@@ -18,9 +18,12 @@ type FileInfo struct {
 	IsText  bool
 }
 
-func (s *Service) discoverModifiedFiles(rootPath string) ([]FileInfo, error) {
+func (s *Service) discoverModifiedFiles(rootPath string, excludeFolders []string) ([]FileInfo, error) {
 	var modifiedFiles []FileInfo
-
+	excludeSet := make(map[string]struct{}, len(excludeFolders))
+	for _, folder := range excludeFolders {
+		excludeSet[folder] = struct{}{}
+	}
 	err := filepath.Walk(rootPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			s.logger.Error("could not walk through file or directory", "err", err.Error())
@@ -31,6 +34,11 @@ func (s *Service) discoverModifiedFiles(rootPath string) ([]FileInfo, error) {
 
 		// Skip directories that start with '.' but not the root directory
 		if info.IsDir() && strings.HasPrefix(info.Name(), ".") && path != rootPath {
+			return filepath.SkipDir
+		}
+
+		// Skip directories that are in the excluded folders list
+		if info.IsDir() && isInExcludedPath(path, excludeSet) {
 			return filepath.SkipDir
 		}
 
@@ -103,4 +111,18 @@ func isTextFile(path string) bool {
 
 	ext := strings.ToLower(filepath.Ext(path))
 	return textExtensions[ext]
+}
+
+// Assumes current path and root path are clean
+func isInExcludedPath(currentPath string, excludeSet map[string]struct{}) bool {
+
+	if len(excludeSet) == 0 {
+		return false
+	}
+
+	if _, ok := excludeSet[currentPath]; !ok {
+		return false
+	}
+
+	return true
 }

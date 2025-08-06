@@ -34,6 +34,12 @@ var createIndexHandlerTestCases = []testCase{
 		expectedStatus: http.StatusNotAcceptable,
 	},
 	{
+		name:           "InvalidExcludeFolders",
+		requestHeaders: defaultTestRequestHeaders,
+		requestBody:    map[string]any{"path": mustGetAbsolutePath(testFileSystemRootIndex), "exclude_folders": []string{"abc"}},
+		expectedStatus: http.StatusNotAcceptable,
+	},
+	{
 		name:           "Success",
 		requestHeaders: defaultTestRequestHeaders,
 		requestBody:    map[string]any{"path": mustGetAbsolutePath(testFileSystemRootIndex)},
@@ -43,6 +49,12 @@ var createIndexHandlerTestCases = []testCase{
 		name:           "SuccessDuplicate",
 		requestHeaders: defaultTestRequestHeaders,
 		requestBody:    map[string]any{"path": mustGetAbsolutePath(testFileSystemRootIndex)},
+		expectedStatus: http.StatusAccepted,
+	},
+	{
+		name:           "SuccessWithValidExcludeFolders",
+		requestHeaders: defaultTestRequestHeaders,
+		requestBody:    map[string]any{"path": mustGetAbsolutePath(testFileSystemRootIndex), "exclude_folders": []string{mustGetAbsolutePath(testFileSystemRootIndex + "/subdir")}},
 		expectedStatus: http.StatusAccepted,
 	}}
 

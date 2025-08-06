@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -12,7 +13,8 @@ import (
 )
 
 type IndexRequest struct {
-	Path string `json:"path" validate:"required,valid_path"`
+	Path           string   `json:"path" validate:"required,valid_path"`
+	ExcludeFolders []string `json:"exclude_folders" validate:"valid_paths"`
 }
 
 type IndexStatusRequest struct {
@@ -43,7 +45,7 @@ func handleCreateIndex(indexService *index.Service, logger logger.Logger, valida
 			writeResponse(c, nil, http.StatusUnprocessableEntity, []string{"failed to extract request body parameters"})
 			return
 		}
-
+		fmt.Println("exclude paths----------------------<", request.ExcludeFolders)
 		if err := validator.Validate(request); err != nil {
 			logger.Warn("could not validate request", "err", err.Error())
 			c.Abort()
@@ -53,7 +55,7 @@ func handleCreateIndex(indexService *index.Service, logger logger.Logger, valida
 
 		requestID := uuid.New().String()
 
-		if err := indexService.Build(request.Path, requestID); err != nil {
+		if err := indexService.Build(request.Path, request.ExcludeFolders, requestID); err != nil {
 			logger.Error("failed to create index", "err", err.Error())
 			writeResponse(c, nil, http.StatusConflict, []string{"failed to start indexing, possibly because another indexing operation is in progress"})
 			return

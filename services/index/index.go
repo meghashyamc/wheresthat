@@ -41,8 +41,9 @@ type Service struct {
 }
 
 type indexRequest struct {
-	rootPath  string
-	requestID string
+	rootPath       string
+	excludeFolders []string
+	requestID      string
 }
 
 func New(ctx context.Context, logger logger.Logger, indexer Indexer, metadataStore MetadataStore) *Service {
@@ -58,13 +59,13 @@ func New(ctx context.Context, logger logger.Logger, indexer Indexer, metadataSto
 }
 
 // Create builds an index or incrementally updates it if it already exists
-func (s *Service) Build(rootPath string, requestID string) error {
+func (s *Service) Build(rootPath string, excludeFolders []string, requestID string) error {
 
 	s.setRequestStatus(requestID, 0)
 
 	select {
 	// This leads to s.buildIndex being called
-	case s.buildIndexC <- indexRequest{rootPath: rootPath, requestID: requestID}:
+	case s.buildIndexC <- indexRequest{rootPath: rootPath, excludeFolders: excludeFolders, requestID: requestID}:
 		return nil
 	default:
 		s.logger.Warn("request to index while indexing is already in progress")
@@ -95,7 +96,7 @@ func (s *Service) build(ctx context.Context) {
 			indexTimeoutCtx, cancel := context.WithTimeout(ctx, maxIndexBuildingTime)
 			defer cancel()
 
-			s.buildIndex(indexTimeoutCtx, req.rootPath, req.requestID)
+			s.buildIndex(indexTimeoutCtx, req.rootPath, req.excludeFolders, req.requestID)
 		case <-ctx.Done():
 			s.logger.Info("index service stopped", "reason", ctx.Err())
 			return
@@ -103,8 +104,8 @@ func (s *Service) build(ctx context.Context) {
 	}
 }
 
-func (s *Service) buildIndex(ctx context.Context, rootPath string, requestID string) {
-	files, err := s.getFilesToIndex(rootPath)
+func (s *Service) buildIndex(ctx context.Context, rootPath string, excludeFolders []string, requestID string) {
+	files, err := s.getFilesToIndex(rootPath, excludeFolders)
 	if err != nil {
 		s.logger.Error("failed to create index", "request_id", requestID, "err", err.Error())
 		s.setRequestStatus(requestID, ProgressStatusFailed)
@@ -247,10 +248,10 @@ func (s *Service) updateMetadata(ctx context.Context, indexTime time.Time, reque
 
 }
 
-func (s *Service) getFilesToIndex(rootPath string) ([]FileInfo, error) {
+func (s *Service) getFilesToIndex(rootPath string, excludeFolders []string) ([]FileInfo, error) {
 
 	s.logger.Info("performing incremental indexing")
-	files, err := s.discoverModifiedFiles(rootPath)
+	files, err := s.discoverModifiedFiles(rootPath, excludeFolders)
 	if err != nil {
 		return nil, err
 	}

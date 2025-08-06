@@ -64,6 +64,7 @@ func (v *Validator) getTagValidationDetails() map[string]tagValidationDetails {
 		v.tagValidationDetailsMap = map[string]tagValidationDetails{
 			"valid_path":  {validatorFunc: v.isValidPath, err: errors.New("invalid path")},
 			"valid_query": {validatorFunc: v.isValidQuery, err: errors.New("invalid query")},
+			"valid_paths": {validatorFunc: v.areValidPaths, err: errors.New("invalid exclude path(s)")},
 		}
 	})
 	return v.tagValidationDetailsMap
@@ -91,7 +92,50 @@ func useJSONFieldNames(fld reflect.StructField) string {
 }
 
 func (v *Validator) isValidPath(fl validator.FieldLevel) bool {
-	inputPath := fl.Field().String()
+	return v.isValidPathStr(fl.Field().String())
+}
+
+func (v *Validator) isValidQuery(fl validator.FieldLevel) bool {
+	query := fl.Field().String()
+	if len(query) == 0 {
+		return false
+	}
+	if strings.TrimSpace(query) == "" {
+		v.logger.Warn("query is empty", "query", query)
+		return false
+	}
+
+	return true
+}
+
+func (v *Validator) areValidPaths(fl validator.FieldLevel) bool {
+	field := fl.Field()
+	if field.Kind() != reflect.Slice {
+		v.logger.Warn("exclude paths field is not a slice")
+		return false
+	}
+
+	if field.Len() == 0 {
+		return true
+	}
+
+	for i := 0; i < field.Len(); i++ {
+		pathValue := field.Index(i)
+		if pathValue.Kind() != reflect.String {
+			v.logger.Warn("exclude path is not a string", "index", i)
+			return false
+		}
+
+		path := pathValue.String()
+		if !v.isValidPathStr(path) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (v *Validator) isValidPathStr(inputPath string) bool {
 	if len(inputPath) == 0 {
 		return true
 	}
@@ -112,19 +156,6 @@ func (v *Validator) isValidPath(fl validator.FieldLevel) bool {
 
 	if _, err := os.Stat(inputPath); err != nil {
 		v.logger.Info("path does not exist", "path", inputPath)
-		return false
-	}
-
-	return true
-}
-
-func (v *Validator) isValidQuery(fl validator.FieldLevel) bool {
-	query := fl.Field().String()
-	if len(query) == 0 {
-		return false
-	}
-	if strings.TrimSpace(query) == "" {
-		v.logger.Warn("query is empty", "query", query)
 		return false
 	}
 

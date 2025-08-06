@@ -13,6 +13,7 @@ let pollingInterval = null;
 
 // DOM Elements
 const folderPathInput = document.getElementById('folder-path');
+const excludeFoldersInput = document.getElementById('exclude-folders');
 const suggestionsBtn = document.getElementById('suggestions-btn');
 const suggestionsDropdown = document.getElementById('suggestions-dropdown');
 const recentPathsSection = document.getElementById('recent-paths-section');
@@ -90,6 +91,9 @@ document.addEventListener('DOMContentLoaded', function() {
     folderPathInput.addEventListener('keypress', function(e) {
         if (e.key === 'Enter') handleIndex();
     });
+    
+    // Load excluded folders from localStorage on page load
+    loadExcludedFolders();
 });
 
 // Status message utility
@@ -208,6 +212,7 @@ function closeModal() {
 // Index functionality
 async function handleIndex() {
     const folderPath = folderPathInput.value.trim();
+    const excludeFoldersText = excludeFoldersInput.value.trim();
     
     if (!folderPath) {
         showStatus(indexStatus, 'Please enter a folder path', 'error');
@@ -222,20 +227,34 @@ async function handleIndex() {
     showProgressBar();
     updateProgress(0);
     
+    // Parse excluded folders from comma-separated input
+    const excludeFolders = excludeFoldersText
+        ? excludeFoldersText.split(',').map(folder => folder.trim()).filter(folder => folder.length > 0)
+        : [];
+    
     try {
+        const requestBody = {
+            path: folderPath
+        };
+        
+        if (excludeFolders.length > 0) {
+            requestBody.exclude_folders = excludeFolders;
+        }
+        
         const response = await fetch(`${API_BASE_URL}/index`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-                path: folderPath
-            })
+            body: JSON.stringify(requestBody)
         });
         
         if (response.ok) {
             const data = await response.json();
             currentIndexRequestID = data.data.request_id;
+            
+            // Save excluded folders to localStorage for next time
+            saveExcludedFolders();
             
             // Start polling for progress
             startPolling(folderPath);
@@ -477,5 +496,22 @@ function stopPolling() {
     if (pollingInterval) {
         clearInterval(pollingInterval);
         pollingInterval = null;
+    }
+}
+
+// Load and save excluded folders to localStorage for user convenience
+function loadExcludedFolders() {
+    const savedExcludedFolders = localStorage.getItem('excludedFolders');
+    if (savedExcludedFolders) {
+        excludeFoldersInput.value = savedExcludedFolders;
+    }
+}
+
+function saveExcludedFolders() {
+    const excludeFoldersText = excludeFoldersInput.value.trim();
+    if (excludeFoldersText) {
+        localStorage.setItem('excludedFolders', excludeFoldersText);
+    } else {
+        localStorage.removeItem('excludedFolders');
     }
 }
