@@ -13,4 +13,4 @@ After running the binary, open `http://localhost:8080/ui` in a browser to index/
 
 To change default config values, checkout `config/config.local.yaml` or set relevant environment variables (refer to `config/config.go`).
 
-Note: The UI has a button to index files. Files need to be indexed before they can be searched.
+Note: The UI has a button to index files. Files need to be indexed before they can be searched. If you're searching after a while, it's a good idea to index again. _Re-indexing is incremental and should be much faster than indexing the first time._
