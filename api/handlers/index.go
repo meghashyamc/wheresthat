@@ -2,8 +2,9 @@ package handlers
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -45,9 +46,14 @@ func handleCreateIndex(indexService *index.Service, logger logger.Logger, valida
 			writeResponse(c, nil, http.StatusUnprocessableEntity, []string{"failed to extract request body parameters"})
 			return
 		}
-		fmt.Println("exclude paths----------------------<", request.ExcludeFolders)
 		if err := validator.Validate(request); err != nil {
 			logger.Warn("could not validate request", "err", err.Error())
+			c.Abort()
+			writeResponse(c, nil, http.StatusNotAcceptable, []string{err.Error()})
+			return
+		}
+
+		if err := semanticallyValidateExcludePaths(logger, request); err != nil {
 			c.Abort()
 			writeResponse(c, nil, http.StatusNotAcceptable, []string{err.Error()})
 			return
@@ -66,6 +72,21 @@ func handleCreateIndex(indexService *index.Service, logger logger.Logger, valida
 		}
 		writeResponse(c, response, http.StatusAccepted, nil)
 	}
+}
+
+func semanticallyValidateExcludePaths(logger logger.Logger, request IndexRequest) error {
+	for _, path := range request.ExcludeFolders {
+		if path == request.Path {
+			logger.Warn("could not validate 'exclude folders'", "err", "path to exclude is the same as index path")
+			return errors.New("path to exclude cannot be the same as index path")
+		}
+
+		if !strings.HasPrefix(path, request.Path) {
+			logger.Warn("could not validate 'exclude folders'", "err", "path to exclude is not under index path")
+			return errors.New("path to exclude must begin with the index path")
+		}
+	}
+	return nil
 }
 
 func handleGetIndexStatus(indexService *index.Service, logger logger.Logger, validator *validation.Validator) gin.HandlerFunc {
