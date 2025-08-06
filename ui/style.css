@@ -43,6 +43,7 @@ header {
     background: var(--bg-secondary);
     border-radius: 12px;
     border: 1px solid var(--border-primary);
+    position: relative;
 }
 
 header h1 {
@@ -56,6 +57,27 @@ header p {
     color: var(--text-secondary);
     font-size: 1.1em;
     font-weight: 400;
+}
+
+.index-modal-btn {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    padding: 8px 16px;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.index-modal-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    border-color: var(--border-secondary);
 }
 
 section {
@@ -506,6 +528,12 @@ section h2 {
         left: 0;
         min-width: auto;
     }
+
+    .index-modal-btn {
+        position: static;
+        margin-top: 16px;
+        width: 100%;
+    }
 }
 
 /* Progress bar styles */
@@ -537,4 +565,91 @@ section h2 {
     font-size: 14px;
     font-weight: 500;
     color: var(--text-secondary);
+}
+
+/* Modal Styles */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    animation: modalFadeIn 0.3s ease;
+}
+
+.modal.active {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-content {
+    background: var(--bg-secondary);
+    border-radius: 12px;
+    border: 1px solid var(--border-primary);
+    width: 90%;
+    max-width: 600px;
+    min-height: 400px;
+    max-height: 90vh;
+    overflow: visible;
+    animation: modalSlideIn 0.3s ease;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 24px 28px 0;
+    border-bottom: 1px solid var(--border-primary);
+    margin-bottom: 28px;
+}
+
+.modal-header h2 {
+    color: var(--text-primary);
+    font-size: 1.5em;
+    font-weight: 600;
+    margin: 0;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    line-height: 1;
+}
+
+.modal-close:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.modal-body {
+    padding: 0 28px 28px;
+    overflow: visible;
+}
+
+@keyframes modalFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes modalSlideIn {
+    from { 
+        transform: scale(0.9) translateY(-20px);
+        opacity: 0;
+    }
+    to { 
+        transform: scale(1) translateY(0);
+        opacity: 1;
+    }
 }

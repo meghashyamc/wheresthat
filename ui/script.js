@@ -38,6 +38,11 @@ const prevBtn = document.getElementById('prev-btn');
 const nextBtn = document.getElementById('next-btn');
 const pageInfo = document.getElementById('page-info');
 
+// Modal elements
+const indexModal = document.getElementById('index-modal');
+const indexModalBtn = document.getElementById('index-modal-btn');
+const modalCloseBtn = document.getElementById('modal-close-btn');
+
 // Event listeners
 document.addEventListener('DOMContentLoaded', function() {
     indexBtn.addEventListener('click', handleIndex);
@@ -46,6 +51,13 @@ document.addEventListener('DOMContentLoaded', function() {
     nextBtn.addEventListener('click', (e) => handleNextPage(e));
     suggestionsBtn.addEventListener('click', toggleSuggestions);
     recentSearchesBtn.addEventListener('click', toggleRecentSearches);
+    
+    // Modal event listeners
+    indexModalBtn.addEventListener('click', openModal);
+    modalCloseBtn.addEventListener('click', closeModal);
+    indexModal.addEventListener('click', function(e) {
+        if (e.target === indexModal) closeModal();
+    });
     
     // Setup suggestion items
     setupSuggestionItems();
@@ -59,6 +71,13 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         if (!recentSearchesDropdown.contains(e.target) && !recentSearchesBtn.contains(e.target)) {
             recentSearchesDropdown.classList.remove('active');
+        }
+    });
+    
+    // ESC key support for modal
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && indexModal.classList.contains('active')) {
+            closeModal();
         }
     });
     
@@ -171,6 +190,19 @@ function addToRecentSearches(query) {
         localStorage.setItem('recentSearches', JSON.stringify(recentSearches));
         updateRecentSearches();
     }
+}
+
+// Modal functions
+function openModal() {
+    indexModal.classList.add('active');
+    // Focus on the folder path input when modal opens
+    setTimeout(() => folderPathInput.focus(), 100);
+}
+
+function closeModal() {
+    indexModal.classList.remove('active');
+    // Close any open dropdowns when modal closes
+    suggestionsDropdown.classList.remove('active');
 }
 
 // Index functionality
