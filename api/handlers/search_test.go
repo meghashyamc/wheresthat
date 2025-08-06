@@ -51,9 +51,6 @@ var searchHandlerTestCases = []testCase{
 					{
 						Path: mustGetAbsolutePath(testFileSystemRootSearch + "/file1.txt"),
 					},
-					{
-						Path: mustGetAbsolutePath(testFileSystemRootSearch + "/subdir/file3.md"),
-					},
 				},
 			},
 		}},
@@ -136,9 +133,6 @@ var searchHandlerTestCases = []testCase{
 				Results: []searchdb.Result{
 					{
 						Path: mustGetAbsolutePath(testFileSystemRootSearch + "/subdir/nested/file5.py"),
-					},
-					{
-						Path: mustGetAbsolutePath(testFileSystemRootSearch + "/file2.go"),
 					},
 				},
 			},
