@@ -170,7 +170,7 @@ func (b *BleveDB) Search(queryString string, limit int, offset int) (*Response, 
 		}
 
 		// Extract snippet if content matches exist
-		result.Snippet = b.extractSnippet(result.Path, hit.Locations, queryString)
+		result.Snippet = b.extractSnippet(result.Path, hit.Locations)
 
 		results[i] = result
 	}
@@ -347,7 +347,7 @@ func (b *BleveDB) Close() error {
 	return nil
 }
 
-func (b *BleveDB) extractSnippet(filePath string, locations search.FieldTermLocationMap, queryString string) string {
+func (b *BleveDB) extractSnippet(filePath string, locations search.FieldTermLocationMap) string {
 	// Check if there are content locations from the search
 	contentLocations, hasContentMatch := locations[indexFieldContent]
 
