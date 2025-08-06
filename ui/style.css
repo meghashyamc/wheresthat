@@ -33,29 +33,29 @@ body {
 .container {
     max-width: 1200px;
     margin: 0 auto;
-    padding: 20px;
+    padding: 16px;
 }
 
 header {
     text-align: center;
-    margin-bottom: 40px;
-    padding: 30px;
+    margin-bottom: 20px;
+    padding: 20px;
     background: var(--bg-secondary);
-    border-radius: 12px;
+    border-radius: 8px;
     border: 1px solid var(--border-primary);
     position: relative;
 }
 
 header h1 {
     color: var(--accent-primary);
-    font-size: 2.5em;
-    margin-bottom: 10px;
-    font-weight: 700;
+    font-size: 1.8em;
+    margin-bottom: 6px;
+    font-weight: 600;
 }
 
 header p {
     color: var(--text-secondary);
-    font-size: 1.1em;
+    font-size: 0.95em;
     font-weight: 400;
 }
 
@@ -82,9 +82,9 @@ header p {
 
 section {
     background: var(--bg-secondary);
-    margin-bottom: 24px;
-    padding: 28px;
-    border-radius: 12px;
+    margin-bottom: 20px;
+    padding: 22px;
+    border-radius: 8px;
     border: 1px solid var(--border-primary);
     transition: border-color 0.2s ease;
 }
@@ -95,8 +95,8 @@ section:hover {
 
 section h2 {
     color: var(--text-primary);
-    margin-bottom: 20px;
-    font-size: 1.5em;
+    margin-bottom: 16px;
+    font-size: 1.3em;
     font-weight: 600;
 }
 
@@ -343,16 +343,16 @@ section h2 {
     }
     
     header {
-        padding: 20px;
-        margin-bottom: 24px;
+        padding: 16px;
+        margin-bottom: 16px;
     }
     
     header h1 {
-        font-size: 2em;
+        font-size: 1.6em;
     }
     
     section {
-        padding: 20px;
+        padding: 18px;
     }
     
     .form-group {
