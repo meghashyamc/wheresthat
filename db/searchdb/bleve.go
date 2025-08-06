@@ -6,6 +6,7 @@ import (
 	"mime"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -119,6 +120,10 @@ func createIndexMapping() mapping.IndexMapping {
 func (b *BleveDB) Search(queryString string, limit int, offset int) (*Response, error) {
 	start := time.Now()
 
+	if len(strings.TrimSpace(queryString)) == 0 {
+		return &Response{}, nil
+	}
+
 	searchQuery := b.buildSearchQuery(queryString)
 
 	searchRequest := bleve.NewSearchRequestOptions(searchQuery, limit, offset, false)
@@ -173,14 +178,33 @@ func (b *BleveDB) Search(queryString string, limit int, offset int) (*Response, 
 	return response, nil
 }
 
+func parseQuotedQuery(queryString string) (quotedPhrases []string, remainingTerms string) {
+	// Regular expression to find quoted phrases
+	quotedRegex := regexp.MustCompile(`"([^"]*)"`)
+
+	// Find all quoted phrases
+	matches := quotedRegex.FindAllStringSubmatch(queryString, -1)
+	for _, match := range matches {
+		if len(match) > 1 && strings.TrimSpace(match[1]) != "" {
+			quotedPhrases = append(quotedPhrases, strings.TrimSpace(match[1]))
+		}
+	}
+
+	// Remove quoted phrases from the original string to get remaining terms
+	remainingTerms = quotedRegex.ReplaceAllString(queryString, " ")
+	remainingTerms = strings.TrimSpace(remainingTerms)
+
+	return quotedPhrases, remainingTerms
+}
+
 func (b *BleveDB) buildSearchQuery(queryString string) query.Query {
 
 	const (
-		boostForContent      = 3.0
-		boostForFileName     = 2.0
-		boostForPath         = 1.0
-		boostForPhraseMatch  = 5.0
-		boostForPartialMatch = 1.5
+		boostForContent       = 3.0
+		boostForFileName      = 2.0
+		boostForPath          = 1.0
+		boostForRegularPhrase = 5.0
+		boostForPartialMatch  = 1.5
 	)
 
 	queryString = strings.ToLower(strings.TrimSpace(queryString))
@@ -189,41 +213,79 @@ func (b *BleveDB) buildSearchQuery(queryString string) query.Query {
 		return bleve.NewMatchAllQuery()
 	}
 
+	quotedPhrases, remainingTerms := parseQuotedQuery(queryString)
 	disjunctQuery := bleve.NewDisjunctionQuery()
 
+	if len(quotedPhrases) == 0 && len(remainingTerms) == 0 {
+		b.buildSearchSubQueryForRegularPhrase(disjunctQuery, queryString)
+		return disjunctQuery
+	}
+
+	for _, phrase := range quotedPhrases {
+		if len(phrase) == 0 {
+			continue
+		}
+		b.buildSearchSubQueryForQuotedPhrase(disjunctQuery, queryString)
+	}
+
+	if len(remainingTerms) > 0 {
+		b.buildSearchSubQueryForRegularPhrase(disjunctQuery, remainingTerms)
+	}
+
+	return disjunctQuery
+}
+
+func (b *BleveDB) buildSearchSubQueryForQuotedPhrase(query *query.DisjunctionQuery, queryString string) {
+	const boost = 6.0
+
+	contentPhraseQuery := bleve.NewMatchPhraseQuery(queryString)
+	contentPhraseQuery.SetField(indexFieldContent)
+	contentPhraseQuery.SetBoost(boost)
+	query.AddQuery(contentPhraseQuery)
+
+}
+
+func (b *BleveDB) buildSearchSubQueryForRegularPhrase(query *query.DisjunctionQuery, queryString string) {
+	const (
+		boostForContent       = 3.0
+		boostForFileName      = 2.0
+		boostForPath          = 1.0
+		boostForRegularPhrase = 5.0
+		boostForPartialMatch  = 1.5
+	)
 	contentQuery := bleve.NewMatchQuery(queryString)
 	contentQuery.SetField(indexFieldContent)
 	contentQuery.SetBoost(boostForContent)
-	disjunctQuery.AddQuery(contentQuery)
+	query.AddQuery(contentQuery)
 
 	nameQuery := bleve.NewMatchQuery(queryString)
 	nameQuery.SetField(indexFieldName)
 	nameQuery.SetBoost(boostForFileName)
-	disjunctQuery.AddQuery(nameQuery)
+	query.AddQuery(nameQuery)
 
 	pathQuery := bleve.NewMatchQuery(queryString)
 	pathQuery.SetField(indexFieldPath)
 	pathQuery.SetBoost(boostForPath)
-	disjunctQuery.AddQuery(pathQuery)
+	query.AddQuery(pathQuery)
 
 	phraseQuery := bleve.NewMatchPhraseQuery(queryString)
 	phraseQuery.SetField(indexFieldContent)
-	phraseQuery.SetBoost(boostForPhraseMatch)
-	disjunctQuery.AddQuery(phraseQuery)
+	phraseQuery.SetBoost(boostForRegularPhrase)
+	query.AddQuery(phraseQuery)
 
+	// Prefix matching for partial matches
 	if len(queryString) > 2 {
 		prefixQuery := bleve.NewPrefixQuery(queryString)
 		prefixQuery.SetField(indexFieldName)
 		prefixQuery.SetBoost(boostForPartialMatch)
-		disjunctQuery.AddQuery(prefixQuery)
+		query.AddQuery(prefixQuery)
 
 		contentPrefixQuery := bleve.NewPrefixQuery(queryString)
 		contentPrefixQuery.SetField(indexFieldContent)
 		contentPrefixQuery.SetBoost(boostForPartialMatch)
-		disjunctQuery.AddQuery(contentPrefixQuery)
+		query.AddQuery(contentPrefixQuery)
 	}
 
-	return disjunctQuery
 }
 
 func (b *BleveDB) DeleteDocuments(documentIDs []string) error {
