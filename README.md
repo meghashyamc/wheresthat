@@ -18,6 +18,12 @@ go install github.com/meghashyamc/wheresthat@latest
 
 Open `http://localhost:8080/ui` in a browser to access `Wheres's That`.
 
+### Run the binary
+
+Download and run [the released binary](https://github.com/meghashyamc/wheresthat/releases).
+
+Open `http://localhost:8080/ui` in a browser to access `Wheres's That`.
+
 ## Index Files
 
 Before you can search for files, you need to create an index. Click on the `Index` button, enter the root path to index and wait for the indexing to finish. Indexing may take a long time the first time. Subsequent indexing should only index changed files and should happen quickly.
